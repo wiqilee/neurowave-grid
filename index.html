@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>NeuroWave Grid — Final (AI Portrait • Story • Music • Auto-Evolve)</title>
+  <title>NeuroWave Grid — Final (AI Portrait • Story • Music • DJ)</title>
 
   <!-- MediaPipe FaceMesh (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
@@ -14,6 +14,10 @@
       --bg:#06070c; --panel:#0f1117; --muted:#7e8a9a; --accent:#7dd3fc; --accent-2:#a78bfa;
       --cols:32; --rows:20; --depth:60px; --gap:6px; --cellpx:22px; --glow:hsl(270 95% 72% / .95);
       --ui-zoom:1;
+
+      /* NEW: auto-fit & user zoom to keep grid inside the scene */
+      --fit:1;           /* computed to prevent cropping */
+      --userScale:1;     /* ALT+wheel or SHIFT+drag to adjust */
     }
 
     html,body{height:100%}
@@ -22,7 +26,7 @@
       background:radial-gradient(1400px 900px at 68% 28%, #0b1030 0%, #070a18 55%, #05060b 100%);
       font:500 14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
       display:grid; grid-template-rows:auto 1fr; gap:10px;
-      overflow:auto; /* both directions */
+      overflow:auto;
     }
 
     header{
@@ -33,7 +37,6 @@
     header .dot{width:8px;height:8px;border-radius:50%; background:var(--accent-2); box-shadow:0 0 14px var(--accent-2)}
     .muted{color:var(--muted)}
 
-    /* Page is wider than viewport so horizontal scroll works on small screens */
     .wrap{
       display:grid;
       grid-template-columns: minmax(820px,1fr) 420px;
@@ -63,7 +66,7 @@
     button.active{box-shadow:0 0 0 2px #2055ff66, 0 0 40px #2055ff22; background:#0f1a35}
     .slider{width:100%; accent-color:var(--accent)}
     .row{display:flex; gap:8px; align-items:center}
-    input[type="text"], textarea{
+    input[type="text"], textarea, select{
       flex:1; background:#0c1020; border:1px solid rgba(255,255,255,.08); color:#e6efff; padding:8px 10px; border-radius:10px
     }
     textarea{min-height:80px}
@@ -71,7 +74,6 @@
     input[type="checkbox"]{accent-color:var(--accent)}
     .subtle{font-size:12px}
 
-    /* Style thumbnails */
     .style-help{ margin:6px 0 6px; color:#8fa2c6; font-size:12px }
     .style-grid{
       display:grid; grid-template-columns: repeat(auto-fill, minmax(110px,1fr));
@@ -92,13 +94,16 @@
     }
     .style-card:hover{ box-shadow:0 0 0 2px #2055ff66, 0 0 22px #2055ff1f; }
 
-    .scene{position:relative; perspective:1200px; display:grid; place-items:center; overflow:hidden; border-radius:16px; min-height:0}
+    .scene{
+      position:relative; perspective:1200px; display:grid; place-items:center; overflow:hidden; border-radius:16px; min-height:0
+    }
     .grid{
       display:grid; gap:var(--gap); transform-style:preserve-3d;
-      transform: rotateX(60deg) rotateZ(-45deg) translateZ(0);
+      /* IMPORTANT: we add scale(var(--fit)) scale(var(--userScale)) so it never gets cropped */
+      transform: rotateX(60deg) rotateZ(-45deg) translateZ(0) scale(var(--fit)) scale(var(--userScale));
       transition: transform 600ms cubic-bezier(.2,.6,0,1)
     }
-    .grid:hover{ transform: rotateX(64deg) rotateZ(-45deg) translateZ(6px)}
+    .grid:hover{ transform: rotateX(64deg) rotateZ(-45deg) translateZ(6px) scale(var(--fit)) scale(var(--userScale)) }
     .hud{
       position:absolute; top:12px; left:12px; display:flex; gap:10px; align-items:center;
       padding:6px 10px; border-radius:12px; background:linear-gradient(180deg, rgba(13,18,33,.8), rgba(13,18,33,.4));
@@ -118,10 +123,19 @@
     }
     .credit a{ color:#8bb6ff; text-decoration:underline }
 
+    /* Watermark (optional) */
+    .wm{
+      position:absolute; right:12px; bottom:12px; z-index:3;
+      padding:4px 8px; border-radius:8px; font-size:11px; letter-spacing:.02em;
+      background:linear-gradient(180deg, rgba(13,18,33,.75), rgba(13,18,33,.42));
+      border:1px solid rgba(255,255,255,.06); color:#cfe2ff; display:none;
+    }
+    .wm.show{display:inline-flex}
+
     .cube{
       position:relative; width:var(--cellpx); height:var(--cellpx);
       transform-style:preserve-3d; transition: transform 160ms ease, filter 160ms ease;
-      will-change: transform, filter; /* smoother animation */
+      will-change: transform, filter;
     }
     .cube .face{position:absolute; inset:0; background:linear-gradient(180deg,#162036,#0c1120);
       border:1px solid rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(0,0,0,.35)}
@@ -140,21 +154,36 @@
       background:linear-gradient(180deg, rgba(10,12,20,.85), rgba(10,12,20,.5)); padding:4px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.06);
     }
     footer a{ color:#cfe2ff; text-decoration:underline }
+
+    /* === DJ overlay canvas (laser/strobe) === */
+    .fx{
+      position:absolute; inset:0; z-index:2; pointer-events:none;
+      mix-blend-mode:screen; opacity:.9;
+    }
+    .fx.hidden{ opacity:0 }
+
+    /* Toggle pill polish */
+    .sidebar .btns label.toggle{ padding:6px 8px; border:1px solid rgba(255,255,255,.06); border-radius:10px; background:#121521 }
+    .sidebar .btns label.toggle input{ margin-right:4px }
   </style>
 </head>
 <body>
   <header>
     <div class="dot"></div>
     <strong>NeuroWave Grid — Final</strong>
-    <span class="muted">AI portrait (FaceMesh), CLIP-style mapping, Story Blend, Music/Mic reactive, Auto-Evolve — no libraries.</span>
+    <span class="muted">AI portrait (FaceMesh), CLIP-style mapping, Story Blend, Music/Mic reactive, DJ Mode, Auto-Evolve — no libraries.</span>
   </header>
 
   <div class="wrap">
-    <section class="panel scene" id="scene">
-      <div class="hud" id="hud">Nodes: <b id="active">0</b> · FPS: <b id="fps">60</b> · Mode: <b id="mode">AI</b></div>
+    <section class="panel scene" id="scene" title="Tip: ALT + mouse wheel to zoom the grid. SHIFT + drag up/down also zooms.">
+      <div class="hud" id="hud">
+        Nodes: <b id="active">0</b> · FPS: <b id="fps">60</b> <span id="bpmWrap" style="display:none">· BPM: <b id="bpm">0</b></span> · Mode: <b id="mode">AI</b>
+      </div>
       <div class="badge" id="badge">AI MODE</div>
       <div class="credit" id="creditOverlay"></div>
+      <div class="wm" id="wm">NeuroWave Grid • Wiqi Lee</div>
       <div class="grid" id="grid"></div>
+      <canvas id="fx" class="fx"></canvas>
       <video id="webcam" playsinline muted></video>
       <audio id="music" controls></audio>
     </section>
@@ -203,6 +232,43 @@
           style="background-image:linear-gradient(180deg, transparent, rgba(0,0,0,.55)),url('https://images.unsplash.com/photo-1496307042754-b4aa456c4a2d?auto=format&fit=crop&w=600&q=60');"></button>
       </div>
 
+      <!-- Shape / Text Projection -->
+      <h3 style="margin-top:12px">Shape / Text Projection</h3>
+      <div class="row">
+        <input id="maskText" type="text" placeholder="Type a name… (uses Text mode)"/>
+        <label class="toggle"><input id="maskTextEnable" type="checkbox"/> Text</label>
+      </div>
+      <div class="kv" style="margin-top:6px">
+        <div class="muted">Text Size</div>
+        <div>
+          <input id="maskTextSize" class="slider" type="range" min="60" max="220" value="120"/>
+          <small class="muted">Size: <b id="maskTextSizeVal">120%</b></small>
+        </div>
+        <div class="muted">Shape</div>
+        <div>
+          <select id="maskShape">
+            <option value="none">None</option>
+            <option value="city">City Skyline</option>
+            <option value="person">Person</option>
+            <option value="spiral">Spiral</option>
+            <option value="mountain">Mountain</option>
+          </select>
+        </div>
+        <div class="muted">Strength</div>
+        <div>
+          <input id="maskStrength" class="slider" type="range" min="0" max="200" value="80"/>
+          <small class="muted">+Height: <b id="maskStrengthVal">0.80×</b></small>
+        </div>
+        <div class="muted">Animate</div>
+        <div><label class="toggle"><input id="maskAnimate" type="checkbox" checked/> On</label></div>
+        <div class="muted">Mask Colors</div>
+        <div><label class="toggle"><input id="maskUseColors" type="checkbox"/> Use</label></div>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="maskApply">Apply Mask</button>
+        <button id="maskClear">Clear</button>
+      </div>
+
       <h3 style="margin-top:12px">Modes</h3>
       <div class="btns">
         <button data-mode="ai" class="active">Prompt AI</button>
@@ -213,6 +279,7 @@
         <button data-mode="photo">Photo Mosaic</button>
         <button data-mode="webcam">Webcam Face</button>
         <button data-mode="story">Story Blend</button>
+        <button data-mode="dj">DJ Mode</button>
       </div>
 
       <h3 style="margin-top:12px">Photo / Webcam</h3>
@@ -245,13 +312,18 @@
       </div>
       <small class="muted subtle">Tip: choose your YouTube tab and tick “Share tab audio”.</small>
 
-      <h3 style="margin-top:12px">Credit (optional but recommended)</h3>
+      <h3 style="margin-top:12px">Credit & Utilities</h3>
       <div class="row">
         <input id="creditText" type="text" placeholder="Music: Title — Artist"/>
       </div>
       <div class="row" style="margin-top:6px">
         <input id="creditLink" type="text" placeholder="Credit URL (e.g., YouTube link)"/>
-        <label class="toggle"><input id="creditToggle" type="checkbox"/> Show</label>
+        <label class="toggle"><input id="creditToggle" type="checkbox"/> Show credit</label>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="copyUrl">Copy Share URL</button>
+        <label class="toggle"><input id="wmToggle" type="checkbox"/> Watermark</label>
+        <label class="toggle"><input id="lowPower" type="checkbox"/> Low-power mode</label>
       </div>
 
       <h3 style="margin-top:12px">Controls</h3>
@@ -289,10 +361,30 @@
           <button class="preset" data-preset="neon">Neon Night</button>
           <button class="preset" data-preset="forest">Forest Dawn</button>
           <button class="preset" data-preset="storm">Supercell</button>
+          <button class="preset" data-preset="wiqi">Wiqi Neon</button>
         </div>
         <div class="muted">Auto-Evolve</div>
         <div>
           <label class="toggle"><input id="evolve" type="checkbox"/> Change style every 30s</label>
+        </div>
+      </div>
+
+      <!-- DJ Controls -->
+      <h3 style="margin-top:12px">DJ Controls</h3>
+      <div class="kv">
+        <div class="muted">Intensity</div>
+        <div>
+          <input id="djIntensity" class="slider" type="range" min="0" max="100" value="70"/>
+          <small class="muted">Mix: <b id="djIntensityVal">0.70</b></small>
+        </div>
+        <div class="muted">FX</div>
+        <div class="btns">
+          <label class="toggle"><input id="djStrobe" type="checkbox" checked/> Strobe</label>
+          <label class="toggle"><input id="djColor" type="checkbox" checked/> Color Cycle</label>
+          <label class="toggle"><input id="djShake" type="checkbox" checked/> Shake</label>
+          <label class="toggle"><input id="djBeams" type="checkbox" checked/> Beams</label>
+          <label class="toggle"><input id="djKaleido" type="checkbox"/> Kaleido</label>
+          <label class="toggle"><input id="djCuts" type="checkbox" checked/> Auto Cuts</label>
         </div>
       </div>
     </aside>
@@ -326,19 +418,26 @@
         const gi0=(perm[ii+perm[jj]]%12)*2,gi1=(perm[ii+i1+perm[jj+j1]]%12)*2,gi2=(perm[ii+1+perm[jj+1]]%12)*2;
         let n0=0,n1=0,n2=0;
         let t0=.5-x0*x0-y0*y0;if(t0>0){t0*=t0;n0=t0*t0*dot([grad3[gi0],grad3[gi0+1]],x0,y0);}
-        let t1=.5-x1*x1-y1*y1;if(t1>0){t1*=t1;n1=t1*t1*dot([grad3[gi1],grad3[gi1+1]],x1,y1);}
+        let t1=.5-x1*x1-y1*y1;if(t1>0){t1*=t0;n1=t1*t1*dot([grad3[gi1],grad3[gi1+1]],x1,y1);}
         let t2=.5-x2*x2-y2*y2;if(t2>0){t2*=t2;n2=t2*t2*dot([grad3[gi2],grad3[gi2+1]],x2,y2);}
         return 70*(n0+n1+n2);
       }
     }
 
     /* ========= UI refs ========= */
+    const sceneEl=document.getElementById('scene');
     const gridEl=document.getElementById('grid');
+    const fxCanvas=document.getElementById('fx');
+    const fxx=fxCanvas.getContext('2d');
+
     const hudActive=document.getElementById('active');
     const hudFPS=document.getElementById('fps');
     const hudMode=document.getElementById('mode');
+    const hudBPMWrap=document.getElementById('bpmWrap');
+    const hudBPM=document.getElementById('bpm');
     const badge=document.getElementById('badge');
     const creditOverlay=document.getElementById('creditOverlay');
+    const wmEl=document.getElementById('wm');
 
     const colsRange=document.getElementById('cols');
     const sizeRange=document.getElementById('size');
@@ -364,12 +463,6 @@
     const webcamStart=document.getElementById('webcamStart');
     const webcamStop=document.getElementById('webcamStop');
 
-    /* Note: Story-mode controls may not exist in this UI */
-    const framesTextarea=document.getElementById('frames');
-    const storyLoadBtn=document.getElementById('storyLoad');
-    const storyPlayBtn=document.getElementById('storyPlay');
-    const storyStopBtn=document.getElementById('storyStop');
-
     const musicEl=document.getElementById('music');
     const musicFile=document.getElementById('musicFile');
     const audioMicToggle=document.getElementById('audioMic');
@@ -381,53 +474,74 @@
 
     const evolveToggle=document.getElementById('evolve');
 
+    const lowPowerToggle=document.getElementById('lowPower');
+    const wmToggle=document.getElementById('wmToggle');
+    const copyUrlBtn=document.getElementById('copyUrl');
+
     const zoomRange=document.getElementById('zoom');
     const zoomVal=document.getElementById('zoomVal');
 
-    /* Mode buttons */
-    document.querySelectorAll('button[data-mode]').forEach(btn=>{
-      btn.addEventListener('click',()=>{
-        document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-        MODE=btn.dataset.mode;
-        hudMode.textContent=btn.textContent;
-        badge.textContent=(MODE==='ai'?'AI MODE': MODE.toUpperCase());
-      });
-    });
+    /* Mask controls */
+    const maskText=document.getElementById('maskText');
+    const maskTextEnable=document.getElementById('maskTextEnable');
+    const maskTextSize=document.getElementById('maskTextSize');
+    const maskTextSizeVal=document.getElementById('maskTextSizeVal');
+    const maskShape=document.getElementById('maskShape');
+    const maskStrength=document.getElementById('maskStrength');
+    const maskStrengthVal=document.getElementById('maskStrengthVal');
+    const maskAnimate=document.getElementById('maskAnimate');
+    const maskUseColors=document.getElementById('maskUseColors');
+    const maskApply=document.getElementById('maskApply');
+    const maskClear=document.getElementById('maskClear');
 
-    /* Preset text buttons */
-    document.querySelectorAll('.preset').forEach(p=> p.addEventListener('click',()=>{
-      const map={ ocean:'ocean deep calm teal blue gentle', neon:'neon cyberpunk hot magenta electric fast', forest:'forest dawn green golden mist slow', storm:'storm supercell lightning cobalt violent fast' };
-      promptInput.value=map[p.dataset.preset]; applyPrompt();
-    }));
-
-    /* Thumbnails -> prompt */
-    document.getElementById('styleGrid').addEventListener('click',(e)=>{
-      const card=e.target.closest('.style-card'); if(!card) return;
-      promptInput.value=card.dataset.prompt||'';
-      applyPrompt();
-      window.scrollTo({top:0, behavior:'smooth'});
-    });
+    /* DJ controls */
+    const djIntensity=document.getElementById('djIntensity');
+    const djIntensityVal=document.getElementById('djIntensityVal');
+    const djStrobe=document.getElementById('djStrobe');
+    const djColor=document.getElementById('djColor');
+    const djShake=document.getElementById('djShake');
+    const djBeams=document.getElementById('djBeams');
+    const djKaleido=document.getElementById('djKaleido');
+    const djCuts=document.getElementById('djCuts');
 
     /* ========= State ========= */
     let MODE='ai', cells=[], active=0;
-    const baseSeed=Math.floor(Math.random()*1e9);
+    let baseSeed=Math.floor(Math.random()*1e9);
     let noise=makeNoise(baseSeed);
 
     const sampler=document.createElement('canvas');
     const sctx=sampler.getContext('2d',{willReadFrequently:true});
 
+    /* Mask canvas (text/shapes → grid) */
+    const maskCanvas=document.createElement('canvas');
+    const mctx=maskCanvas.getContext('2d',{willReadFrequently:true});
+    let mask={type:'none', enabled:false, heights:null, colors:null, strength:0.8, animate:true, offset:0, text:'', textSize:1.2, useColors:false, seed:0};
+
     let photo={w:0,h:0,heights:null,colors:null,ready:false,img:null,strength:1.2,useColors:true};
     let story={frames:[],heights:[],colors:[],idx:0,prog:0,playing:false,speed:0.25};
 
     const face={
-      enabled:false, points:[], heat:null, cols:0, rows:0, camera:null, mesh:null, mouth:0, brow:0,
+      enabled:false, points:[], heat:null, cols:0, rows:0, camera:null, mesh:null, mouth:0, brow:0, smile:0,
       resizeCache(){ this.cols=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cols'))||0; this.rows=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--rows'))||0; this.heat=new Float32Array(this.cols*this.rows);}
+    };
+
+    /* === DJ Mode state === */
+    const DJ = {
+      enabled:false,
+      intensity:0.7,
+      strobe:true, color:true, shake:true, beams:true, kaleido:false, cuts:true,
+      submode:0, cutTimer:0, wobble:0
     };
 
     /* ========= Helpers ========= */
     function setVar(n,v){ document.documentElement.style.setProperty(n,v) }
     function flow(x,y,t){ const n=noise(x*0.08+t*0.35,y*0.08-t*0.25); return n*Math.PI*2 }
+    function setSeed(s){ baseSeed=(s>>>0); noise=makeNoise(baseSeed); caResize(); }
+    function resizeFx(){
+      const r=sceneEl.getBoundingClientRect();
+      fxCanvas.width=Math.max(1, r.width|0);
+      fxCanvas.height=Math.max(1, r.height|0);
+    }
 
     function rebuildCells(n){
       const frag=document.createDocumentFragment(); gridEl.innerHTML=''; cells.length=0;
@@ -437,6 +551,21 @@
         frag.appendChild(c); cells.push(c);
       }
       gridEl.appendChild(frag);
+    }
+
+    /* === NEW: Fit the tilted grid into the scene so it doesn't get cropped === */
+    function fitGridToScene(){
+      // set to 1 first, measure, then compute best fit scale
+      setVar('--fit', 1);
+      requestAnimationFrame(()=>{
+        const g=gridEl.getBoundingClientRect();
+        const s=sceneEl.getBoundingClientRect();
+        const pad=18; // breathing space
+        const scaleX=(s.width - pad)/g.width;
+        const scaleY=(s.height - pad)/g.height;
+        const fit=Math.max(0.5, Math.min(scaleX, scaleY, 1.6)); // allow slight up-scale
+        setVar('--fit', fit.toFixed(4));
+      });
     }
 
     function recomputeGrid(){
@@ -457,9 +586,14 @@
       speedVal.textContent=(+speedRange.value/42).toFixed(2)+'×';
 
       rebuildCells(cols*rows);
+      maskCanvas.width=cols; maskCanvas.height=rows;
+
       if(photo && photo.img) resampleToGrid(photo.img);
       if(story.frames.length) prepareStoryHeights();
+      if(mask.enabled) buildMask(mask.type);
       face.resizeCache();
+      resizeFx();
+      fitGridToScene();
     }
 
     /* ========= Cellular ========= */
@@ -552,7 +686,7 @@
       }
     }
 
-    /* ========= FaceMesh ========= */
+    /* ========= FaceMesh & Face semantics ========= */
     async function startWebcam(){
       if(face.enabled) return;
       const fm=new FaceMesh({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
@@ -568,6 +702,7 @@
       const lm=res.multiFaceLandmarks[0];
       face.points=lm.map(p=>({x:p.x,y:p.y}));
       buildFaceHeat();
+      estimateExpression();
     }
     function buildFaceHeat(){
       const cols=face.cols, rows=face.rows; if(!cols||!rows) return;
@@ -582,6 +717,16 @@
       const mouthOpen=(()=>{const u=13,l=14;if(!points[u]||!points[l])return 0;return Math.max(0,(points[l].y-points[u].y)*3.2);})();
       const browRaise=(()=>{const b=105,e=159;if(!points[b]||!points[e])return 0;return Math.max(0,(points[b].y-points[e].y)*-8);})();
       face.mouth=mouthOpen; face.brow=browRaise;
+    }
+    function estimateExpression(){
+      const p=face.points; if(!p||!p.length) return;
+      const L=61,R=291,U=13,D=14;
+      if(!p[L]||!p[R]||!p[U]||!p[D]){ face.smile=0; return; }
+      const dx=p[R].x-p[L].x, dy=p[R].y-p[L].y;
+      const width=Math.hypot(dx,dy);
+      const height=Math.hypot(p[D].x-p[U].x, p[D].y-p[U].y)+1e-6;
+      const ratio=width/height;
+      face.smile=clamp((ratio-1.8)/0.8,0,1);
     }
 
     /* ========= Prompt → Params ========= */
@@ -612,43 +757,107 @@
       recomputeGrid();
     }
 
-    /* ========= Audio: file, mic, or YouTube tab ========= */
-    let audio={enabled:false,level:0,ctx:null,analyser:null,srcNode:null,mode:'none'};
+    /* ========= Audio: file, mic, or YouTube tab (Musicality++) ========= */
+    let audio={enabled:false,level:0,ctx:null,analyser:null,srcNode:null,mode:'none',
+      data:null, lastT:performance.now(), onset:0, isKick:false, isSnare:false, bpm:0, beatPulse:0,
+      _lowBuf:new Array(48).fill(0), _midBuf:new Array(48).fill(0), _hiBuf:new Array(48).fill(0), _bufIdx:0,
+      _onsetTimes:[], _raf:0
+    };
 
-    /* NEW: unified, musical meter (bass-weighted with attack/release) */
-    function makeAudioMeter(analyser){
-      analyser.smoothingTimeConstant = 0.8; // natural feel
-      const data=new Uint8Array(analyser.frequencyBinCount);
-      let level=0;
-      const ATTACK=0.5, RELEASE=0.08, GATE=0.02;
-      const W_BASS=1.8, W_MID=0.6, W_TREB=0.3;
+    function startAudioLoop(){
+      cancelAnimationFrame(audio._raf);
+      const data=new Uint8Array(audio.analyser.frequencyBinCount);
+      audio.data=data; audio.enabled=true;
+      const loop=()=>{
+        if(!audio.enabled||!audio.analyser) return;
+        audio.analyser.getByteFrequencyData(data);
+        musicalityUpdate(data);
+        audio._raf=requestAnimationFrame(loop);
+      };
+      audio._raf=requestAnimationFrame(loop);
+    }
 
-      (function loop(){
-        // bail out if audio processing disabled
-        if(!audio.enabled || !analyser) return;
+    function medianOf(arr){
+      const a=arr.slice().sort((x,y)=>x-y); const m=a.length>>1;
+      return a.length%2? a[m] : (a[m-1]+a[m])/2;
+    }
 
-        analyser.getByteFrequencyData(data);
-        const n=data.length;
-        const bEnd=(n*0.18)|0, mEnd=(n*0.55)|0;
-        let b=0,m=0,t=0;
+    function bandEnergy(arr, a, b){
+      let sum=0; for(let i=a;i<=b;i++) sum+=arr[i]; return sum/Math.max(1,(b-a+1));
+    }
 
-        for(let i=0;i<bEnd;i++) b+=data[i];
-        for(let i=bEnd;i<mEnd;i++) m+=data[i];
-        for(let i=mEnd;i<n;i++)   t+=data[i];
+    function musicalityUpdate(spec){
+      const N=spec.length;
+      const iLow0=0, iLow1=Math.floor(N*0.08);         // ~20–200 Hz
+      const iMid0=Math.floor(N*0.08), iMid1=Math.floor(N*0.35); // ~200–1.5k
+      const iHi0=Math.floor(N*0.35), iHi1=Math.floor(N*0.7);    // ~1.5k–6k
 
-        b/=Math.max(1,bEnd);
-        m/=Math.max(1,mEnd-bEnd);
-        t/=Math.max(1,n-mEnd);
+      const low=bandEnergy(spec,iLow0,iLow1);
+      const mid=bandEnergy(spec,iMid0,iMid1);
+      const hi =bandEnergy(spec,iHi0,iHi1);
 
-        let e=(b*W_BASS + m*W_MID + t*W_TREB)/255;
-        e = Math.max(0, (e - GATE)/(1 - GATE)); // simple noise gate
+      audio._lowBuf[audio._bufIdx]=low;
+      audio._midBuf[audio._bufIdx]=mid;
+      audio._hiBuf[audio._bufIdx]=hi;
+      audio._bufIdx=(audio._bufIdx+1)%audio._lowBuf.length;
 
-        // attack/decay envelope
-        level = e>level ? lerp(level,e,ATTACK) : lerp(level,e,RELEASE);
-        audio.level = clamp(level,0,1);
+      const ml=medianOf(audio._lowBuf), mm=medianOf(audio._midBuf), mh=medianOf(audio._hiBuf);
 
-        requestAnimationFrame(loop);
-      })();
+      const lowR = low/(ml+1e-6);
+      const midR = mid/(mm+1e-6);
+      const hiR  = hi /(mh +1e-6);
+
+      const gate=0.02;
+      const energy = Math.max(0, (low*1.2 + mid*0.6 + hi*0.35) / 255 - gate);
+      audio.level = lerp(audio.level||0, energy*2.2, 0.2);
+      audio.level = clamp(audio.level, 0, 1);
+
+      const kick = lowR>1.65 && low>14;
+      const snare= midR>1.55 && hiR>1.15;
+      audio.isKick=kick; audio.isSnare=snare;
+      audio.onset = (kick||snare)? 1: Math.max(0, audio.onset*0.86);
+
+      if(!audio._onsetTimes) audio._onsetTimes=[];
+      if(kick){
+        const now=performance.now();
+        audio.beatPulse=1;
+        audio._onsetTimes.push(now);
+        if(audio._onsetTimes.length>40) audio._onsetTimes.shift();
+
+        const dts=[];
+        for(let i=1;i<audio._onsetTimes.length;i++){
+          const dt=(audio._onsetTimes[i]-audio._onsetTimes[i-1])/1000;
+          if(dt>0.28 && dt<1.1) dts.push(dt);
+        }
+        if(dts.length>=3){
+          const bins=new Map();
+          for(const dt of dts){
+            const key=(Math.round(dt*20)/20).toFixed(2);
+            bins.set(key,(bins.get(key)||0)+1);
+          }
+          let bestKey=null, bestCount=-1;
+          for(const [k,c] of bins){ if(c>bestCount){ bestCount=c; bestKey=k; } }
+          if(bestKey){
+            const bpm=60/parseFloat(bestKey);
+            const good=clamp(bpm,70,180);
+            audio.bpm = lerp(audio.bpm||good, good, 0.25);
+          }
+        }
+      } else {
+        audio.beatPulse = Math.max(0, audio.beatPulse - 0.06);
+      }
+
+      if(audio.bpm>0){
+        hudBPMWrap.style.display='';
+        hudBPM.textContent = Math.round(audio.bpm);
+      } else {
+        hudBPMWrap.style.display='none';
+      }
+
+      // Buffer for DJ stripes / spectrum
+      audio.specBuf = audio.specBuf || new Uint8Array(spec.length);
+      audio.specBuf.set(spec);
+      audio.low = low; audio.mid = mid; audio.hi = hi;
     }
 
     function setupAnalyserFromElement(el){
@@ -660,8 +869,8 @@
         audio.analyser.fftSize=512;
         audio.srcNode.connect(audio.analyser);
         audio.analyser.connect(audio.ctx.destination);
-        audio.enabled=true; audio.mode='music';
-        makeAudioMeter(audio.analyser); // << only change
+        audio.mode='music';
+        startAudioLoop();
       }catch(e){ console.warn('Audio element setup failed',e); }
     }
 
@@ -676,16 +885,16 @@
     audioMicToggle.addEventListener('change', async ()=>{
       if(audioMicToggle.checked){
         try{
-          const stream=await navigator.mediaDevices.getUserMedia({audio:true});
           if(!audio.ctx) audio.ctx=new (window.AudioContext||window.webkitAudioContext)();
+          const stream=await navigator.mediaDevices.getUserMedia({audio:true});
           const src=audio.ctx.createMediaStreamSource(stream);
           audio.analyser=audio.ctx.createAnalyser();
           audio.analyser.fftSize=512;
           src.connect(audio.analyser);
-          audio.enabled=true; audio.mode='mic';
-          makeAudioMeter(audio.analyser); // << only change
+          audio.mode='mic';
+          startAudioLoop();
         }catch(e){ audioMicToggle.checked=false; audio.enabled=false; console.warn('Mic denied',e); }
-      } else { audio.enabled=false; audio.mode='none'; }
+      } else { audio.enabled=false; cancelAnimationFrame(audio._raf); audio.mode='none'; hudBPMWrap.style.display='none'; }
     });
 
     tabAudioBtn.addEventListener('click', async ()=>{
@@ -696,8 +905,8 @@
         audio.analyser=audio.ctx.createAnalyser();
         audio.analyser.fftSize=512;
         src.connect(audio.analyser);
-        audio.enabled=true; audio.mode='tab';
-        makeAudioMeter(audio.analyser); // << only change
+        audio.mode='tab';
+        startAudioLoop();
         alert('Select your YouTube tab and tick “Share tab audio”. If on macOS, allow Screen Recording for your browser.');
       }catch(e){
         console.warn('Tab audio capture denied/unsupported',e);
@@ -705,7 +914,7 @@
       }
     });
 
-    /* ========= Credit overlay ========= */
+    /* ========= Credit & watermark ========= */
     function updateCredit(){
       const text=creditText.value.trim();
       const link=creditLink.value.trim();
@@ -717,27 +926,289 @@
     creditLink.addEventListener('input',updateCredit);
     creditToggle.addEventListener('change',updateCredit);
 
+    wmToggle.addEventListener('change',()=>{ wmEl.classList.toggle('show', wmToggle.checked); });
+
     /* ========= Auto-Evolve ========= */
     let evolveTimer=null;
     evolveToggle.addEventListener('change',(e)=>{
       if(e.target.checked){
         evolveTimer=setInterval(()=>{
-          const bank=['ocean deep calm teal blue gentle','neon cyberpunk hot magenta electric fast','forest dawn green golden mist slow','storm supercell lightning cobalt violent fast'];
+          const bank=['ocean deep calm teal blue gentle','neon cyberpunk hot magenta electric fast','forest dawn green golden mist slow','storm supercell lightning cobalt violent fast','wiqi neon hyperglow violet blue magenta scanlines fast'];
           promptInput.value=bank[(Math.random()*bank.length)|0]; applyPrompt();
         },30000);
       } else { clearInterval(evolveTimer); }
     });
 
+    /* ========= Share URL ========= */
+    function buildShareURL(){
+      const u=new URL(location.href);
+      u.searchParams.set('prompt', promptInput.value.trim());
+      u.searchParams.set('mode', MODE);
+      u.searchParams.set('cols', colsRange.value);
+      u.searchParams.set('size', sizeRange.value);
+      u.searchParams.set('height', heightRange.value);
+      u.searchParams.set('speed', speedRange.value);
+      u.searchParams.set('seed', baseSeed>>>0);
+      u.searchParams.set('colors', useColorsChk.checked?1:0);
+      // mask params
+      u.searchParams.set('mask', mask.enabled?mask.type:'none');
+      u.searchParams.set('mtxt', mask.text||'');
+      u.searchParams.set('mts', Math.round(mask.textSize*100));
+      u.searchParams.set('mstr', Math.round(mask.strength*100));
+      u.searchParams.set('man', mask.animate?1:0);
+      u.searchParams.set('mcol', mask.useColors?1:0);
+      return u.toString();
+    }
+    copyUrlBtn.addEventListener('click', async ()=>{
+      const url=buildShareURL();
+      try{ await navigator.clipboard.writeText(url); alert('Share URL copied to clipboard!'); }
+      catch{ prompt('Copy this URL', url); }
+    });
+    function applyFromURL(){
+      const q=new URLSearchParams(location.search);
+      if(q.has('seed')) setSeed(parseInt(q.get('seed'),10)>>>0);
+      if(q.has('prompt')){ promptInput.value=q.get('prompt'); }
+      if(q.has('mode')){ MODE=q.get('mode'); document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===MODE)); hudMode.textContent=MODE==='ai'?'AI':MODE.charAt(0).toUpperCase()+MODE.slice(1); badge.textContent=MODE==='ai'?'AI MODE':MODE.toUpperCase(); }
+      if(q.has('cols')) colsRange.value=q.get('cols');
+      if(q.has('size')) sizeRange.value=q.get('size');
+      if(q.has('height')) heightRange.value=q.get('height');
+      if(q.has('speed')) speedRange.value=q.get('speed');
+      if(q.has('colors')) useColorsChk.checked = q.get('colors')==='1';
+
+      // mask params
+      const m=q.get('mask')||'none';
+      const mtxt=q.get('mtxt')||'';
+      const mts=parseInt(q.get('mts')||'120',10);
+      const mstr=parseInt(q.get('mstr')||'80',10);
+      const man=q.get('man')==='1';
+      const mcol=q.get('mcol')==='1';
+      if(m!=='none' || mtxt){
+        maskShape.value=m!=='text'?m:'none';
+        maskText.value=mtxt;
+        maskTextEnable.checked = (m==='text' || !!mtxt);
+        maskTextSize.value = clamp(mts,60,220);
+        maskStrength.value = clamp(mstr,0,200);
+        maskAnimate.checked = man;
+        maskUseColors.checked = mcol;
+        syncMaskUI();
+        applyMaskState();
+      }
+    }
+
+    /* ========= Perf polish ========= */
+    let fps=60, t=0,last=performance.now(),accum=0,frames=0;
+    let rafId=0;
+    document.addEventListener('visibilitychange', ()=>{
+      if(document.hidden){ cancelAnimationFrame(rafId); rafId=0; }
+      else { last=performance.now(); rafId=requestAnimationFrame(animate); }
+    });
+    window.addEventListener('resize', ()=>{recomputeGrid(); caResize(); resizeFx(); fitGridToScene();});
+
+    /* ========= MASK BUILDERS ========= */
+    function clearMask(){
+      mask={type:'none', enabled:false, heights:null, colors:null, strength:0.8, animate:true, offset:0, text:'', textSize:1.2, useColors:false, seed:(baseSeed^0xabc123)|0};
+    }
+
+    function syncMaskUI(){
+      maskTextSizeVal.textContent = maskTextSize.value + '%';
+      maskStrengthVal.textContent = (maskStrength.value/100).toFixed(2) + '×';
+    }
+
+    function applyMaskState(){
+      mask.enabled = (maskTextEnable.checked || maskShape.value!=='none');
+      mask.text = maskText.value.trim();
+      mask.type = maskTextEnable.checked ? 'text' : maskShape.value;
+      mask.textSize = maskTextSize.value/100;
+      mask.strength = maskStrength.value/100;
+      mask.animate = maskAnimate.checked;
+      mask.useColors = maskUseColors.checked;
+      buildMask(mask.type);
+    }
+
+    function buildMask(kind){
+      if(!mask.enabled){ mask.heights=null; mask.colors=null; return; }
+      const cols=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cols'))||32;
+      const rows=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--rows'))||20;
+      maskCanvas.width=cols; maskCanvas.height=rows;
+
+      mctx.clearRect(0,0,cols,rows);
+      mctx.fillStyle='#000'; mctx.fillRect(0,0,cols,rows);
+      mctx.fillStyle='#fff';
+      mctx.strokeStyle='#fff';
+
+      if(kind==='text'){
+        const txt=mask.text||'';
+        mctx.save();
+        mctx.translate(cols*0.5, rows*0.56);
+        const fontPx=Math.max(8, Math.floor(rows*0.7*mask.textSize));
+        mctx.font=`${fontPx}px 800 system-ui, ui-sans-serif, -apple-system, Segoe UI, Roboto`;
+        mctx.textAlign='center'; mctx.textBaseline='middle';
+        mctx.shadowColor='rgba(255,255,255,0.1)'; mctx.shadowBlur=0;
+        mctx.fillStyle='#fff';
+        mctx.fillText(txt,0,0);
+        mctx.restore();
+      } else if(kind==='city'){
+        const rnd=seededRand(mask.seed||baseSeed);
+        const baseH=rows*0.2;
+        for(let x=0;x<cols;x++){
+          const h=baseH + Math.floor((rows*0.6)*(0.35+0.65*rnd()));
+          mctx.fillRect(x, rows-h, 1, h);
+          if(Math.random()<0.3){
+            mctx.fillRect(x, rows-h-1-Math.floor(rnd()*3), 1, 1+Math.floor(rnd()*3));
+          }
+        }
+      } else if(kind==='person'){
+        const cx=cols*0.5, cy=rows*0.6, scale=Math.min(cols,rows)*0.35;
+        mctx.save();
+        mctx.translate(cx,cy);
+        mctx.beginPath();
+        mctx.arc(0,-scale*0.85, scale*0.22, 0, Math.PI*2);
+        mctx.rect(-scale*0.12,-scale*0.65, scale*0.24, scale*0.9);
+        mctx.rect(-scale*0.45,-scale*0.35, scale*0.9, scale*0.12);
+        mctx.rect(-scale*0.24, scale*0.25, scale*0.16, scale*0.55);
+        mctx.rect( scale*0.08, scale*0.25, scale*0.16, scale*0.55);
+        mctx.fill();
+        mctx.restore();
+      } else if(kind==='spiral'){
+        mctx.save();
+        mctx.translate(cols*0.5, rows*0.55);
+        mctx.beginPath();
+        const turns=3.2;
+        for(let a=0;a<Math.PI*2*turns;a+=0.03){
+          const r = (Math.min(cols,rows)*0.45)*(a / (Math.PI*2*turns));
+          const x = Math.cos(a)*r, y=Math.sin(a)*r*0.75;
+          if(a===0) mctx.moveTo(x,y); else mctx.lineTo(x,y);
+        }
+        mctx.lineWidth=2; mctx.stroke();
+        mctx.lineWidth=4; mctx.globalAlpha=0.4; mctx.stroke(); mctx.globalAlpha=1;
+        mctx.restore();
+      } else if(kind==='mountain'){
+        const rnd=seededRand(mask.seed||baseSeed);
+        const peaks=5;
+        mctx.beginPath();
+        mctx.moveTo(0, rows*0.75);
+        for(let i=1;i<=peaks;i++){
+          const x=(i/peaks)*cols;
+          const y=rows*(0.35 + 0.25*rnd());
+          mctx.lineTo(x, y);
+        }
+        mctx.lineTo(cols, rows*0.9);
+        mctx.lineTo(cols, rows);
+        mctx.lineTo(0, rows);
+        mctx.closePath(); mctx.fill();
+      }
+
+      const img=mctx.getImageData(0,0,cols,rows).data;
+      const N=cols*rows; const heights=new Float32Array(N); const colors=new Uint32Array(N);
+      for(let i=0;i<N;i++){
+        const o=i*4; const r=img[o], g=img[o+1], b=img[o+2];
+        const lum=(0.2126*r+0.7152*g+0.0722*b)/255;
+        heights[i]=lum;
+        colors[i]=(255<<24)|(b<<16)|(g<<8)|r;
+      }
+      mask.heights=heights; mask.colors=colors;
+
+      if(mask.useColors && !mask.animate){
+        const glow=getComputedStyle(document.documentElement).getPropertyValue('--glow').trim()||'hsl(270 95% 72% / .95)';
+        for(let i=0;i<N;i++){
+          if(heights[i]>0.2){
+            const c=cells[i]; const top=c?.querySelector('.top'); if(top){
+              top.style.background=`linear-gradient(180deg, ${glow}, rgba(0,0,0,0.22))`;
+            }
+          }
+        }
+      }
+    }
+
+    /* ========= Mode buttons ========= */
+    document.querySelectorAll('button[data-mode]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        MODE=btn.dataset.mode;
+        DJ.enabled = (MODE==='dj');
+        hudMode.textContent=btn.textContent;
+        badge.textContent=(MODE==='ai'?'AI MODE': MODE.toUpperCase());
+        if(!DJ.enabled){ gridEl.style.transform=''; fitGridToScene(); } // reset camera transform + refit when leaving DJ
+      });
+    });
+
+    /* ========= DJ overlay drawing ========= */
+    function drawBeams(t){
+      const w=fxCanvas.width, h=fxCanvas.height;
+      fxx.clearRect(0,0,w,h);
+      if(!DJ.enabled) return;
+
+      if(DJ.beams){
+        const cx=w*0.5, cy=h*0.58;
+        const beams=12;
+        for(let i=0;i<beams;i++){
+          const a = (i/beams)*Math.PI*2 + t*(0.6 + (audio.level||0)*2);
+          const len = (0.35 + (audio.level||0)*0.65) * Math.hypot(w,h);
+          const x = cx + Math.cos(a)*len;
+          const y = cy + Math.sin(a)*len;
+          fxx.beginPath();
+          fxx.moveTo(cx,cy); fxx.lineTo(x,y);
+          const hue=(i*30 + ((audio.bpm||120)/2))%360;
+          fxx.strokeStyle=`hsla(${hue},100%,70%,${0.06+(audio.level||0)*0.22})`;
+          fxx.lineWidth=2 + (audio.level||0)*6;
+          fxx.stroke();
+        }
+      }
+
+      if(DJ.strobe && (audio.onset>0.9)){
+        fxx.fillStyle='rgba(255,255,255,0.10)';
+        fxx.fillRect(0,0,w,h);
+      }
+    }
+
     /* ========= Animate ========= */
-    let t=0,last=performance.now(),accum=0,frames=0,fps=60;
     function animate(){
       const now=performance.now(); const dt=(now-last)/1000; last=now; accum+=dt; frames++; if(accum>0.35){ fps=Math.round(frames/accum); frames=0; accum=0 }
       hudFPS.textContent=fps;
+
+      // Low-power auto downscale
+      if(lowPowerToggle.checked){
+        if(fps<48){ if(+colsRange.value>16){ colsRange.value=+colsRange.value-4; recomputeGrid(); } }
+      }
 
       const cols=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cols'))||32;
       const rows=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--rows'))||20;
       const sp=lerp(.25, 3.2, +speedRange.value/100); t+=dt*sp;
       active=0;
+
+      // DJ camera/color logic
+      if(MODE==='dj'){
+        DJ.enabled=true;
+        DJ.wobble = DJ.wobble*0.9 + (audio.level||0)*0.6 + (audio.beatPulse||0)*0.8;
+
+        const scaleStr = ' scale(var(--fit)) scale(var(--userScale))';
+
+        if(DJ.shake){
+          const rx = 60 + Math.sin(t*3.2)*2.5*DJ.wobble*20;
+          const rz = -45 + Math.cos(t*2.6)*2.0*DJ.wobble*20;
+          gridEl.style.transform=`rotateX(${rx}deg) rotateZ(${rz}deg) translateZ(${DJ.wobble*6}px)` + scaleStr;
+        } else {
+          gridEl.style.transform=`rotateX(60deg) rotateZ(-45deg) translateZ(0)` + scaleStr;
+        }
+
+        if(DJ.color){
+          const base = audio.bpm ? (performance.now()/1000) * (audio.bpm/60) : t;
+          const hue = (base*240 + (audio.isSnare? 120:0))%360;
+          document.documentElement.style.setProperty('--glow', `hsl(${Math.floor(hue)} 95% 68% / .95)`);
+        }
+
+        if(DJ.cuts){
+          DJ.cutTimer += dt;
+          const every = audio.bpm ? (32*(60/audio.bpm)) : 8;
+          if(audio.isKick && DJ.cutTimer > every*0.25){
+            DJ.submode = (DJ.submode+1)%4;
+            DJ.cutTimer=0;
+          }
+        }
+      } else {
+        DJ.enabled=false;
+      }
 
       if(MODE==='ca' && Math.random()<0.008){
         const r=Math.random();
@@ -751,34 +1222,48 @@
         if(story.prog>=1){ story.prog=0; story.idx=(story.idx+1)%story.frames.length; prepareStoryHeights(); }
       }
 
+      // beat-sync nudge
+      const beatKick=audio.beatPulse||0;
+      const beatNudge = beatKick*cols*0.12;
+
+      // optional mask scroll
+      if(mask.enabled && mask.animate){
+        mask.offset = (mask.offset + dt* (0.6 + audio.level*1.4)) % cols;
+      }
+
       for(let i=0;i<cells.length;i++){
         const c=cells[i]; const y=(i/cols|0), x=(i%cols);
         let amp=0;
 
-        /* Base wave so the grid always moves */
+        // base motion
         const base = (Math.sin((x + y)*0.25 + t*1.6) * 0.5 + 0.5) * 0.12;
         amp = Math.max(amp, base);
 
         if(MODE==='noise' || MODE==='ai'){ const n=noise(x*0.1 + t*0.55, y*0.1 - t*0.38); amp=Math.max(amp,(n+1)/2); }
+
         if(MODE==='ripple' || MODE==='ai'){
-          const cx=cols*.5+Math.sin(t*.8)*cols*.25, cy=rows*.5+Math.cos(t*.6)*rows*.25;
+          const cx=cols*.5+Math.sin(t*.8)*cols*.25 + beatNudge, cy=rows*.5+Math.cos(t*.6)*rows*.25;
           const dx=x-cx, dy=y-cy; const d=Math.hypot(dx,dy);
           const r = Math.max(0, 1 - d/8) * (Math.sin(d*1.1 - t*4)*.5+.5);
           amp = MODE==='ai'? lerp(amp, r, .45) : r;
         }
+
         if(MODE==='flow' || MODE==='ai'){
           const a = flow(x,y,t); const swirl=(Math.sin(a*2+t*1.3)*.5+.5);
           amp = MODE==='ai'? lerp(amp, swirl, .35) : swirl;
         }
+
         if(MODE==='ca' || MODE==='ai'){
           if((i===0) && (Math.random()<.3)) caStep();
           const cellCA = ca.state[y*cols+x];
           amp = MODE==='ai'? lerp(amp, cellCA, .5) : cellCA;
         }
+
         if((MODE==='photo' || MODE==='ai') && photo && photo.ready && photo.w===cols && photo.h===rows){
           const ph = photo.heights[y*cols + x];
           amp = MODE==='ai' ? lerp(amp, ph, .6) : ph;
         }
+
         if(MODE==='story' && story.frames.length){
           const i0=story.idx, i1=(story.idx+1)%story.frames.length;
           const h0=story.heights[i0]?.[y*cols+x]||0, h1=story.heights[i1]?.[y*cols+x]||0;
@@ -790,6 +1275,7 @@
           const R=(r0+(r1-r0)*mix)|0, G=(g0+(g1-g0)*mix)|0, B=(b0+(b1-b0)*mix)|0;
           const topFace=c.querySelector('.top'); if(topFace){ topFace.style.background=`linear-gradient(180deg, rgb(${R},${G},${B}), rgb(${(R*.6)|0},${(G*.6)|0},${(B*.6)|0}))`; }
         }
+
         if((MODE==='webcam' || MODE==='ai') && face.enabled && face.heat){
           const fh = face.heat[y*cols + x]||0;
           const mouthBoost = (face.mouth||0)*0.8;
@@ -798,7 +1284,48 @@
           amp = MODE==='ai'? lerp(amp, feat, .5) : feat;
         }
 
-        if(audio.enabled){ amp = clamp(amp + audio.level*0.6, 0, 1) }
+        // DJ rich patterns (rings + stripes + spin + spectrum)
+        if(MODE==='dj'){
+          let xx=x, yy=y;
+          if(DJ.kaleido){ xx = Math.min(x, cols-1-x); yy = Math.min(y, rows-1-y); }
+
+          const cx=cols*.5, cy=rows*.5;
+          const dx=xx-cx, dy=yy-cy; const rad=Math.hypot(dx,dy);
+
+          const k = DJ.submode;
+          const rings   = Math.sin(rad*(0.7+0.25*k) - t*(4+2*k) - (audio.level||0)*3)*.5+.5;
+          const stripes = Math.sin((xx*(0.6+0.15*k) + t*(8+4*k)) + (audio.mid||0)/10)*.5+.5;
+          const spin    = Math.sin(Math.atan2(dy,dx)*(3+k) + t*(4+1.5*k))*.5+.5;
+
+          const sb = audio.specBuf ? audio.specBuf[Math.min(audio.specBuf.length-1, Math.floor((xx/cols)*audio.specBuf.length))]/255 : 0;
+
+          let djAmp = (rings*0.45 + stripes*0.35 + spin*0.2)*DJ.intensity + sb*0.6*DJ.intensity;
+          if(audio.isKick) djAmp += 0.25*DJ.intensity;
+
+          amp = clamp(amp*0.6 + djAmp, 0, 1);
+        }
+
+        // Mask (text/shape)
+        if(mask.enabled && mask.heights){
+          const off = mask.animate ? Math.floor(mask.offset) : 0;
+          const xx = (x - off + cols*1000)%cols;
+          const m = mask.heights[y*cols + xx] || 0;
+          amp = clamp(amp + m*mask.strength, 0, 1);
+
+          if(mask.useColors && mask.animate){
+            const glow=getComputedStyle(document.documentElement).getPropertyValue('--glow').trim()||'hsl(270 95% 72% / .95)';
+            if(m>0.25){
+              const top=c.querySelector('.top'); if(top){
+                top.style.background=`linear-gradient(180deg, ${glow}, rgba(0,0,0,0.22))`;
+              }
+            }
+          }
+        }
+
+        // Audio reactivity
+        if(audio.enabled){
+          amp = clamp(amp + audio.level*0.6 + (audio.beatPulse||0)*0.22, 0, 1);
+        }
 
         const z = amp * (parseInt(heightRange.value,10));
         c.style.transform=`translateZ(${z}px)`;
@@ -806,7 +1333,19 @@
         const hot = (amp>.55)|0; if(hot) active++; c.dataset.hot=hot;
       }
       hudActive.textContent=active;
-      requestAnimationFrame(animate);
+
+      // Face semantics → glow drift
+      if(face.enabled){
+        const smile=face.smile||0, brow=face.brow||0;
+        if(smile>0.55){
+          document.documentElement.style.setProperty('--glow', `hsl(${Math.floor(lerp(290,20,Math.random()*0.15))} 95% 68% / .95)`);
+        } else if(brow>0.45){
+          document.documentElement.style.setProperty('--glow', `hsl(${Math.floor(lerp(200,260,Math.random()*0.15))} 95% 68% / .95)`);
+        }
+      }
+
+      drawBeams(t);
+      rafId=requestAnimationFrame(animate);
     }
 
     /* ========= Events & Init ========= */
@@ -816,14 +1355,44 @@
       if(photo.img) resampleToGrid(photo.img);
     }
 
+    // NEW: user zoom with ALT+wheel or SHIFT+drag
+    let userScale=1, dragZooming=false, dragStartY=0, dragStartScale=1;
+    sceneEl.addEventListener('wheel', (e)=>{
+      if(e.altKey || e.ctrlKey){
+        e.preventDefault();
+        const k = e.deltaY<0 ? 1.06 : 0.94;
+        userScale = clamp(userScale*k, 0.6, 1.8);
+        setVar('--userScale', userScale.toFixed(3));
+        fitGridToScene();
+      }
+    }, {passive:false});
+    sceneEl.addEventListener('pointerdown',(e)=>{
+      if(e.shiftKey){ dragZooming=true; dragStartY=e.clientY; dragStartScale=userScale; sceneEl.setPointerCapture(e.pointerId); }
+    });
+    sceneEl.addEventListener('pointermove',(e)=>{
+      if(!dragZooming) return;
+      const dy = e.clientY - dragStartY;
+      userScale = clamp(dragStartScale * Math.exp(-dy*0.003), 0.6, 1.8);
+      setVar('--userScale', userScale.toFixed(3));
+      fitGridToScene();
+    });
+    sceneEl.addEventListener('pointerup',(e)=>{ if(dragZooming){ dragZooming=false; sceneEl.releasePointerCapture(e.pointerId); }});
+    sceneEl.addEventListener('pointercancel',()=>{ dragZooming=false; });
+
     function init(){
+      applyFromURL();
       recomputeGrid(); caResize(); face.resizeCache();
-      promptInput.value='neon cyberpunk stormy waves'; applyPrompt();
-      requestAnimationFrame(animate());
+      if(!promptInput.value) promptInput.value='neon cyberpunk stormy waves';
+      applyPrompt();
       updateCredit();
       const s=zoomRange.value/100;
       document.documentElement.style.setProperty('--ui-zoom', s);
       zoomVal.textContent=Math.round(s*100)+'%';
+      last=performance.now();
+      resizeFx();
+      fitGridToScene();
+      rafId=requestAnimationFrame(animate);
+      syncMaskUI();
     }
 
     colsRange.addEventListener('input',()=>{recomputeGrid(); caResize()});
@@ -837,7 +1406,6 @@
     });
 
     applyBtn.addEventListener('click',applyPrompt);
-    window.addEventListener('resize',()=>{recomputeGrid(); caResize()});
 
     useColorsChk.addEventListener('change',()=>{photo.useColors=useColorsChk.checked; if(photo.img) resampleToGrid(photo.img);});
     photoStrengthRange.addEventListener('input',applyPhotoStrengthUI);
@@ -861,24 +1429,19 @@
       }catch(err){ console.warn(err); }
     });
 
-    /* Story-mode controls are optional in this UI */
-    storyLoadBtn?.addEventListener('click', async()=>{
-      const lines=(framesTextarea?.value||'').split('\n').map(s=>s.trim()).filter(Boolean);
-      if(lines.length<2){ alert('Enter at least 2 image URLs (one per line).'); return; }
-      await storyLoad(lines);
-      MODE='story'; document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active', b.dataset.mode==='story'));
-      hudMode.textContent='Story'; badge.textContent='STORY';
-    });
-    storyPlayBtn?.addEventListener('click',()=>{ story.playing=true; });
-    storyStopBtn?.addEventListener('click',()=>{ story.playing=false; });
-
     webcamStart.addEventListener('click',()=>{ startWebcam().then(()=>{
       MODE='webcam'; document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active', b.dataset.mode==='webcam'));
       hudMode.textContent='Webcam'; badge.textContent='WEBCAM';
     })});
     webcamStop.addEventListener('click',()=>{ stopWebcam(); });
 
-    /* Start! */
+    // Mask UI
+    maskText.addEventListener('input', syncMaskUI);
+    maskTextSize.addEventListener('input', ()=>{ syncMaskUI(); });
+    maskStrength.addEventListener('input', ()=>{ syncMaskUI(); });
+    maskApply.addEventListener('click', ()=>{ applyMaskState(); });
+    maskClear.addEventListener('click', ()=>{ clearMask(); });
+
     init();
   </script>
 </body>
