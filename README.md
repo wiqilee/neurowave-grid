@@ -6,19 +6,8 @@ An interactive 3D cube‑grid visualizer that reacts to prompts, photos/webcam (
 
 ---
 
-## Demo
-
-https://github.com/YOUR_USERNAME/YOUR_REPO/assets/DEMO_ID
-
-> Tip: After you push this repo, upload a short screen capture to your repo’s *Releases* or directly as a repository asset, then replace the link above. You can also keep a local asset instead:
->
-> ```md
-> ![Demo](demo.gif)
-> ```
-> or
-> ```md
-> <video src="demo.mp4" controls muted playsinline></video>
-> ```
+## Live Demo
+👉 https://wiqilee.github.io/neurowave-grid/
 
 ---
 
@@ -120,5 +109,5 @@ All processing happens **in your browser**. No servers; no analytics. (Only CDNs
 
 ## License
 
-MIT — see `LICENSE`.
+MIT — **Wiqi Lee** — [X: @wiqi_lee](https://x.com/wiqi_lee) see `LICENSE`.
 
