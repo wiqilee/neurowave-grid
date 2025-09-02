@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>NeuroWave Grid — Final (AI Portrait • Story • Music • Auto-Evolve)</title>
+
+  <!-- MediaPipe FaceMesh (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+  <style>
+    :root{
+      --bg:#06070c; --panel:#0f1117; --muted:#7e8a9a; --accent:#7dd3fc; --accent-2:#a78bfa;
+      --cols:32; --rows:20; --depth:60px; --gap:6px; --cellpx:22px; --glow:hsl(270 95% 72% / .95);
+      --ui-zoom:1;
+    }
+
+    html,body{height:100%}
+    body{
+      margin:0; color:#dce5f7;
+      background:radial-gradient(1400px 900px at 68% 28%, #0b1030 0%, #070a18 55%, #05060b 100%);
+      font:500 14px/1.5 ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      display:grid; grid-template-rows:auto 1fr; gap:10px;
+      overflow:auto; /* both directions */
+    }
+
+    header{
+      display:flex; align-items:center; gap:12px; padding:10px 14px; backdrop-filter: blur(6px);
+      background:linear-gradient(180deg, rgba(15,17,23,.9), rgba(15,17,23,.6));
+      border-bottom:1px solid rgba(255,255,255,.06)
+    }
+    header .dot{width:8px;height:8px;border-radius:50%; background:var(--accent-2); box-shadow:0 0 14px var(--accent-2)}
+    .muted{color:var(--muted)}
+
+    /* Page is wider than viewport so horizontal scroll works on small screens */
+    .wrap{
+      display:grid;
+      grid-template-columns: minmax(820px,1fr) 420px;
+      gap:14px; padding:0 14px 14px;
+      min-width:1280px;
+      align-items:stretch;
+      zoom: var(--ui-zoom);
+    }
+    @supports not (zoom:1){
+      .wrap{ transform:scale(var(--ui-zoom)); transform-origin: top left; width: calc(1280px / var(--ui-zoom)); }
+    }
+
+    .panel{
+      background:linear-gradient(180deg, rgba(15,17,23,.86), rgba(15,17,23,.62));
+      border:1px solid rgba(255,255,255,.06); border-radius:16px; padding:14px; position:relative;
+      box-shadow: 0 20px 40px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.04);
+      min-height:0;
+    }
+    .panel h3{margin:0 0 8px; font-size:12px; font-weight:800; letter-spacing:.12em; color:#a9b7d6; text-transform:uppercase}
+    .kv{display:grid; grid-template-columns:auto 1fr; gap:6px 10px; align-items:center; font-feature-settings:"tnum" on,"lnum" on}
+    .btns{display:flex; flex-wrap:wrap; gap:8px; margin-top:6px}
+    button{
+      cursor:pointer; border:none; padding:8px 10px; border-radius:10px; background:#171a22; color:#e6efff; font-weight:650;
+      border:1px solid rgba(255,255,255,.06); transition:transform .05s ease, background .2s ease, box-shadow .2s ease
+    }
+    button:hover{background:#1b2030}
+    button.active{box-shadow:0 0 0 2px #2055ff66, 0 0 40px #2055ff22; background:#0f1a35}
+    .slider{width:100%; accent-color:var(--accent)}
+    .row{display:flex; gap:8px; align-items:center}
+    input[type="text"], textarea{
+      flex:1; background:#0c1020; border:1px solid rgba(255,255,255,.08); color:#e6efff; padding:8px 10px; border-radius:10px
+    }
+    textarea{min-height:80px}
+    label.toggle{display:inline-flex; align-items:center; gap:8px; cursor:pointer}
+    input[type="checkbox"]{accent-color:var(--accent)}
+    .subtle{font-size:12px}
+
+    /* Style thumbnails */
+    .style-help{ margin:6px 0 6px; color:#8fa2c6; font-size:12px }
+    .style-grid{
+      display:grid; grid-template-columns: repeat(auto-fill, minmax(110px,1fr));
+      gap:10px; margin-top:6px; max-height:180px; overflow:auto; padding-bottom:4px;
+    }
+    .style-card{
+      position:relative; height:72px; border-radius:12px; border:1px solid rgba(255,255,255,.08);
+      background:#111 center/cover no-repeat; padding:0; cursor:pointer;
+    }
+    .style-card::before{
+      content:""; position:absolute; inset:0;
+      background:linear-gradient(180deg, rgba(0,0,0,.08), rgba(0,0,0,.55));
+      border-radius:inherit;
+    }
+    .style-card::after{
+      content:attr(data-name); position:absolute; left:8px; bottom:6px; right:8px;
+      font-weight:800; font-size:11px; color:#eaf2ff; text-shadow:0 2px 6px rgba(0,0,0,.7); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .style-card:hover{ box-shadow:0 0 0 2px #2055ff66, 0 0 22px #2055ff1f; }
+
+    .scene{position:relative; perspective:1200px; display:grid; place-items:center; overflow:hidden; border-radius:16px; min-height:0}
+    .grid{
+      display:grid; gap:var(--gap); transform-style:preserve-3d;
+      transform: rotateX(60deg) rotateZ(-45deg) translateZ(0);
+      transition: transform 600ms cubic-bezier(.2,.6,0,1)
+    }
+    .grid:hover{ transform: rotateX(64deg) rotateZ(-45deg) translateZ(6px)}
+    .hud{
+      position:absolute; top:12px; left:12px; display:flex; gap:10px; align-items:center;
+      padding:6px 10px; border-radius:12px; background:linear-gradient(180deg, rgba(13,18,33,.8), rgba(13,18,33,.4));
+      border:1px solid rgba(255,255,255,.06); backdrop-filter: blur(6px); color:#d2def8; font-weight:700; z-index:3;
+    }
+    .hud b{color:#fff}
+    .badge{
+      position:absolute; top:12px; right:12px; padding:6px 10px; border-radius:12px;
+      border:1px solid rgba(255,255,255,.08); background:radial-gradient(100% 100% at 0% 0%, #0c1330 0%, #131a48 100%);
+      font-weight:800; letter-spacing:.08em; z-index:3;
+    }
+    .credit{
+      position:absolute; left:12px; bottom:12px; z-index:3;
+      padding:6px 10px; border-radius:10px;
+      background:linear-gradient(180deg, rgba(13,18,33,.8), rgba(13,18,33,.45));
+      border:1px solid rgba(255,255,255,.06); color:#dbe6ff; font-weight:700; display:none;
+    }
+    .credit a{ color:#8bb6ff; text-decoration:underline }
+
+    .cube{
+      position:relative; width:var(--cellpx); height:var(--cellpx);
+      transform-style:preserve-3d; transition: transform 160ms ease, filter 160ms ease;
+      will-change: transform, filter; /* smoother animation */
+    }
+    .cube .face{position:absolute; inset:0; background:linear-gradient(180deg,#162036,#0c1120);
+      border:1px solid rgba(255,255,255,.06); box-shadow: inset 0 0 0 1px rgba(0,0,0,.35)}
+    .cube .top{transform: rotateX(90deg) translateZ(calc(var(--cellpx)/2));
+      background:linear-gradient(180deg,#173266,#27489a); box-shadow: inset 0 1px 0 rgba(255,255,255,.08)}
+    .cube .right{transform: rotateY(90deg) translateZ(calc(var(--cellpx)/2)); background:linear-gradient(180deg,#0e1730,#162036)}
+    .cube .left{transform: rotateY(-90deg) translateZ(calc(var(--cellpx)/2)); background:linear-gradient(180deg,#0e1730,#162036)}
+    .cube .front{transform: translateZ(calc(var(--cellpx)/2))}
+    .cube .back{transform: rotateY(180deg) translateZ(calc(var(--cellpx)/2))}
+    .cube .bottom{transform: rotateX(-90deg) translateZ(calc(var(--cellpx)/2)); background:#0a0f1b}
+    .cube[data-hot="1"] .top{filter: drop-shadow(0 0 22px var(--glow)) saturate(1.35)}
+
+    video, audio{width:100%; display:none}
+    footer{
+      position:fixed; bottom:10px; left:50%; translate:-50% 0; color:#96a5bf; font-size:12px; opacity:.85; z-index:4;
+      background:linear-gradient(180deg, rgba(10,12,20,.85), rgba(10,12,20,.5)); padding:4px 10px; border-radius:10px; border:1px solid rgba(255,255,255,.06);
+    }
+    footer a{ color:#cfe2ff; text-decoration:underline }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="dot"></div>
+    <strong>NeuroWave Grid — Final</strong>
+    <span class="muted">AI portrait (FaceMesh), CLIP-style mapping, Story Blend, Music/Mic reactive, Auto-Evolve — no libraries.</span>
+  </header>
+
+  <div class="wrap">
+    <section class="panel scene" id="scene">
+      <div class="hud" id="hud">Nodes: <b id="active">0</b> · FPS: <b id="fps">60</b> · Mode: <b id="mode">AI</b></div>
+      <div class="badge" id="badge">AI MODE</div>
+      <div class="credit" id="creditOverlay"></div>
+      <div class="grid" id="grid"></div>
+      <video id="webcam" playsinline muted></video>
+      <audio id="music" controls></audio>
+    </section>
+
+    <aside class="panel sidebar">
+      <h3>Prompt → Style</h3>
+      <div class="row">
+        <input id="prompt" type="text" placeholder="e.g., neon cyberpunk stormy waves"/>
+        <button id="apply">Generate</button>
+      </div>
+      <small class="muted subtle">CLIP-style mapping (on-device): keywords → palette, speed, depth, pattern. No data leaves your browser.</small>
+
+      <!-- Image style picker -->
+      <div class="style-help">Click a thumbnail to apply a style:</div>
+      <div class="style-grid" id="styleGrid">
+        <button class="style-card" data-name="Neon Cyberpunk"
+          data-prompt="neon cyberpunk hot magenta electric fast"
+          style="background-image:linear-gradient(180deg, transparent, rgba(0,0,0,.55)),url('https://images.unsplash.com/photo-1531935321418-7076a976b0b0?auto=format&fit=crop&w=600&q=60');"></button>
+
+        <button class="style-card" data-name="Ocean Dream"
+          data-prompt="ocean deep calm teal blue gentle"
+          style="background-image:linear-gradient(180deg, transparent, rgba(0,0,0,.55)),url('https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=600&q=60');"></button>
+
+        <button class="style-card" data-name="Forest Dawn"
+          data-prompt="forest dawn green golden mist slow"
+          style="background-image:linear-gradient(180deg, transparent, rgba(0,0,0,.55)),url('https://images.unsplash.com/photo-1499346030926-9a72daac6c63?auto=format&fit=crop&w=600&q=60');"></button>
+
+        <button class="style-card" data-name="Supercell"
+          data-prompt="storm supercell lightning cobalt violent fast"
+          style="background-image:linear-gradient(180deg, transparent, rgba(0,0,0,.55)),url('https://images.unsplash.com/photo-1501630834273-4b5604d2ee31?auto=format&fit=crop&w=600&q=60');"></button>
+
+        <button class="style-card" data-name="Vaporwave"
+          data-prompt="vaporwave pastel sunset pink teal grid retro slow"
+          style="background-image:linear-gradient(180deg, transparent, rgba(0,0,0,.55)),url('https://images.unsplash.com/photo-1533005322160-1cde6e668a91?auto=format&fit=crop&w=600&q=60');"></button>
+
+        <button class="style-card" data-name="Aurora"
+          data-prompt="aurora borealis neon cyan purple flowing fast"
+          style="background-image:linear-gradient(180deg, transparent, rgba(0,0,0,.55)),url('https://images.unsplash.com/photo-1533587851505-d119e13fa0d3?auto=format&fit=crop&w=600&q=60');"></button>
+
+        <button class="style-card" data-name="Matrix"
+          data-prompt="matrix dense green code rain fast"
+          style="background-image:linear-gradient(180deg, transparent, rgba(0,0,0,.55)),url('https://images.unsplash.com/photo-1526378722484-bd91ca387e72?auto=format&fit=crop&w=600&q=60');"></button>
+
+        <button class="style-card" data-name="Candy Pastel"
+          data-prompt="pastel candy soft pink mint gentle slow"
+          style="background-image:linear-gradient(180deg, transparent, rgba(0,0,0,.55)),url('https://images.unsplash.com/photo-1496307042754-b4aa456c4a2d?auto=format&fit=crop&w=600&q=60');"></button>
+      </div>
+
+      <h3 style="margin-top:12px">Modes</h3>
+      <div class="btns">
+        <button data-mode="ai" class="active">Prompt AI</button>
+        <button data-mode="flow">Flow Field</button>
+        <button data-mode="ripple">Ripple</button>
+        <button data-mode="noise">Noise</button>
+        <button data-mode="ca">Cellular</button>
+        <button data-mode="photo">Photo Mosaic</button>
+        <button data-mode="webcam">Webcam Face</button>
+        <button data-mode="story">Story Blend</button>
+      </div>
+
+      <h3 style="margin-top:12px">Photo / Webcam</h3>
+      <div class="row">
+        <input id="photoUrl" type="text" placeholder="Image URL (portrait)"/>
+        <button id="loadUrl">Load</button>
+      </div>
+      <div class="row">
+        <input id="photoFile" type="file" accept="image/*"/>
+        <button id="webcamStart">Start Webcam</button>
+        <button id="webcamStop">Stop</button>
+      </div>
+      <div class="kv" style="margin-top:6px">
+        <div class="muted">Use Image Colors</div>
+        <div><label class="toggle"><input id="useColors" type="checkbox" checked/> On</label></div>
+        <div class="muted">Height Strength</div>
+        <div>
+          <input id="photoStrength" class="slider" type="range" min="50" max="200" value="120"/>
+          <small class="muted">Scale: <b id="photoStrengthVal">1.20×</b></small>
+        </div>
+      </div>
+
+      <h3 style="margin-top:12px">Music / Mic</h3>
+      <div class="row">
+        <input id="musicFile" type="file" accept="audio/*"/>
+        <label class="toggle"><input id="audioMic" type="checkbox"/> Use microphone</label>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="tabAudio">Use Tab Audio (YouTube)</button>
+      </div>
+      <small class="muted subtle">Tip: choose your YouTube tab and tick “Share tab audio”.</small>
+
+      <h3 style="margin-top:12px">Credit (optional but recommended)</h3>
+      <div class="row">
+        <input id="creditText" type="text" placeholder="Music: Title — Artist"/>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <input id="creditLink" type="text" placeholder="Credit URL (e.g., YouTube link)"/>
+        <label class="toggle"><input id="creditToggle" type="checkbox"/> Show</label>
+      </div>
+
+      <h3 style="margin-top:12px">Controls</h3>
+      <div class="kv">
+        <div class="muted">Grid</div>
+        <div>
+          <input id="cols" class="slider" type="range" min="12" max="48" value="32"/>
+          <small class="muted">Columns: <b id="colsVal">32</b></small>
+        </div>
+        <div class="muted">Cube Size</div>
+        <div>
+          <input id="size" class="slider" type="range" min="14" max="36" value="22"/>
+          <small class="muted">Cell: <b id="sizeVal">22</b>px</small>
+        </div>
+        <div class="muted">Height</div>
+        <div>
+          <input id="height" class="slider" type="range" min="24" max="120" value="60"/>
+          <small class="muted">Depth: <b id="heightVal">60</b>px</small>
+        </div>
+        <div class="muted">Speed</div>
+        <div>
+          <input id="speed" class="slider" type="range" min="0" max="100" value="42"/>
+          <small class="muted">Anim: <b id="speedVal">1.00×</b></small>
+        </div>
+
+        <div class="muted">UI Scale</div>
+        <div>
+          <input id="zoom" class="slider" type="range" min="60" max="120" value="100"/>
+          <small class="muted">Scale: <b id="zoomVal">100%</b></small>
+        </div>
+
+        <div class="muted">Presets</div>
+        <div class="btns">
+          <button class="preset" data-preset="ocean">Ocean Dream</button>
+          <button class="preset" data-preset="neon">Neon Night</button>
+          <button class="preset" data-preset="forest">Forest Dawn</button>
+          <button class="preset" data-preset="storm">Supercell</button>
+        </div>
+        <div class="muted">Auto-Evolve</div>
+        <div>
+          <label class="toggle"><input id="evolve" type="checkbox"/> Change style every 30s</label>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    Made with ♥ — by <a href="https://x.com/wiqi_lee" target="_blank" rel="noopener">Wiqi Lee</a> (X: @wiqi_lee)
+  </footer>
+
+  <script>
+    /* ========= Utilities ========= */
+    const clamp=(v,mi,ma)=>v<mi?mi:(v>ma?ma:v);
+    const lerp=(a,b,t)=>a+(b-a)*t;
+    const hashStr=(s)=>{let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0}
+    const seededRand=(seed)=>()=> (seed=(seed*1664525+1013904223)>>>0, seed/4294967296);
+
+    function makeNoise(seed=1){
+      function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return ((t^t>>>14)>>>0)/4294967296}}
+      const rand=mulberry32(seed>>>0);
+      const grad3=new Float32Array([1,1,0,-1,1,0,1,-1,0,-1,-1,0,1,0,1,-1,0,1,1,0,-1,-1,0,-1,0,1,1,0,-1,1,0,-1]);
+      const p=new Uint8Array(256);for(let i=0;i<256;i++)p[i]=i;for(let i=255;i>0;i--){const n=Math.floor(rand()*(i+1));const q=p[i];p[i]=p[n];p[n]=q;}
+      const perm=new Uint8Array(512);for(let i=0;i<512;i++)perm[i]=p[i&255];
+      function dot(g,x,y){return g[0]*x+g[1]*y;}
+      return function(xin,yin){
+        const F2=0.5*(Math.sqrt(3)-1),G2=(3-Math.sqrt(3))/6;
+        const s=(xin+yin)*F2;const i=Math.floor(xin+s),j=Math.floor(yin+s);
+        const t=(i+j)*G2;const X0=i-t,Y0=j-t;const x0=xin-X0,y0=yin-Y0;
+        const i1=x0>y0?1:0,j1=x0>y0?0:1;
+        const x1=x0-i1+G2,y1=y0-j1+G2,x2=x0-1+2*G2,y2=y0-1+2*G2;
+        const ii=i&255,jj=j&255;
+        const gi0=(perm[ii+perm[jj]]%12)*2,gi1=(perm[ii+i1+perm[jj+j1]]%12)*2,gi2=(perm[ii+1+perm[jj+1]]%12)*2;
+        let n0=0,n1=0,n2=0;
+        let t0=.5-x0*x0-y0*y0;if(t0>0){t0*=t0;n0=t0*t0*dot([grad3[gi0],grad3[gi0+1]],x0,y0);}
+        let t1=.5-x1*x1-y1*y1;if(t1>0){t1*=t1;n1=t1*t1*dot([grad3[gi1],grad3[gi1+1]],x1,y1);}
+        let t2=.5-x2*x2-y2*y2;if(t2>0){t2*=t2;n2=t2*t2*dot([grad3[gi2],grad3[gi2+1]],x2,y2);}
+        return 70*(n0+n1+n2);
+      }
+    }
+
+    /* ========= UI refs ========= */
+    const gridEl=document.getElementById('grid');
+    const hudActive=document.getElementById('active');
+    const hudFPS=document.getElementById('fps');
+    const hudMode=document.getElementById('mode');
+    const badge=document.getElementById('badge');
+    const creditOverlay=document.getElementById('creditOverlay');
+
+    const colsRange=document.getElementById('cols');
+    const sizeRange=document.getElementById('size');
+    const heightRange=document.getElementById('height');
+    const speedRange=document.getElementById('speed');
+    const colsVal=document.getElementById('colsVal');
+    const sizeVal=document.getElementById('sizeVal');
+    const heightVal=document.getElementById('heightVal');
+    const speedVal=document.getElementById('speedVal');
+
+    const promptInput=document.getElementById('prompt');
+    const applyBtn=document.getElementById('apply');
+
+    const photoFile=document.getElementById('photoFile');
+    const photoUrl=document.getElementById('photoUrl');
+    const loadUrlBtn=document.getElementById('loadUrl');
+
+    const useColorsChk=document.getElementById('useColors');
+    const photoStrengthRange=document.getElementById('photoStrength');
+    const photoStrengthVal=document.getElementById('photoStrengthVal');
+
+    const videoEl=document.getElementById('webcam');
+    const webcamStart=document.getElementById('webcamStart');
+    const webcamStop=document.getElementById('webcamStop');
+
+    /* Note: Story-mode controls may not exist in this UI */
+    const framesTextarea=document.getElementById('frames');
+    const storyLoadBtn=document.getElementById('storyLoad');
+    const storyPlayBtn=document.getElementById('storyPlay');
+    const storyStopBtn=document.getElementById('storyStop');
+
+    const musicEl=document.getElementById('music');
+    const musicFile=document.getElementById('musicFile');
+    const audioMicToggle=document.getElementById('audioMic');
+    const tabAudioBtn=document.getElementById('tabAudio');
+
+    const creditText=document.getElementById('creditText');
+    const creditLink=document.getElementById('creditLink');
+    const creditToggle=document.getElementById('creditToggle');
+
+    const evolveToggle=document.getElementById('evolve');
+
+    const zoomRange=document.getElementById('zoom');
+    const zoomVal=document.getElementById('zoomVal');
+
+    /* Mode buttons */
+    document.querySelectorAll('button[data-mode]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        MODE=btn.dataset.mode;
+        hudMode.textContent=btn.textContent;
+        badge.textContent=(MODE==='ai'?'AI MODE': MODE.toUpperCase());
+      });
+    });
+
+    /* Preset text buttons */
+    document.querySelectorAll('.preset').forEach(p=> p.addEventListener('click',()=>{
+      const map={ ocean:'ocean deep calm teal blue gentle', neon:'neon cyberpunk hot magenta electric fast', forest:'forest dawn green golden mist slow', storm:'storm supercell lightning cobalt violent fast' };
+      promptInput.value=map[p.dataset.preset]; applyPrompt();
+    }));
+
+    /* Thumbnails -> prompt */
+    document.getElementById('styleGrid').addEventListener('click',(e)=>{
+      const card=e.target.closest('.style-card'); if(!card) return;
+      promptInput.value=card.dataset.prompt||'';
+      applyPrompt();
+      window.scrollTo({top:0, behavior:'smooth'});
+    });
+
+    /* ========= State ========= */
+    let MODE='ai', cells=[], active=0;
+    const baseSeed=Math.floor(Math.random()*1e9);
+    let noise=makeNoise(baseSeed);
+
+    const sampler=document.createElement('canvas');
+    const sctx=sampler.getContext('2d',{willReadFrequently:true});
+
+    let photo={w:0,h:0,heights:null,colors:null,ready:false,img:null,strength:1.2,useColors:true};
+    let story={frames:[],heights:[],colors:[],idx:0,prog:0,playing:false,speed:0.25};
+
+    const face={
+      enabled:false, points:[], heat:null, cols:0, rows:0, camera:null, mesh:null, mouth:0, brow:0,
+      resizeCache(){ this.cols=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cols'))||0; this.rows=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--rows'))||0; this.heat=new Float32Array(this.cols*this.rows);}
+    };
+
+    /* ========= Helpers ========= */
+    function setVar(n,v){ document.documentElement.style.setProperty(n,v) }
+    function flow(x,y,t){ const n=noise(x*0.08+t*0.35,y*0.08-t*0.25); return n*Math.PI*2 }
+
+    function rebuildCells(n){
+      const frag=document.createDocumentFragment(); gridEl.innerHTML=''; cells.length=0;
+      for(let i=0;i<n;i++){
+        const c=document.createElement('div'); c.className='cube';
+        c.innerHTML='<div class="face top"></div><div class="face right"></div><div class="face left"></div><div class="face front"></div><div class="face back"></div><div class="face bottom"></div>';
+        frag.appendChild(c); cells.push(c);
+      }
+      gridEl.appendChild(frag);
+    }
+
+    function recomputeGrid(){
+      const cols=+colsRange.value; const cell=+sizeRange.value;
+      const gap=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--gap'))||6;
+      const scene=document.getElementById('scene');
+      const bounds=scene.getBoundingClientRect();
+      const availableH=bounds.height-24; const totalCell=cell+gap;
+      const rows=Math.max(10, Math.floor((availableH*0.72)/totalCell));
+
+      setVar('--cols',cols); setVar('--rows',rows);
+      setVar('--cellpx',cell+'px'); setVar('--depth',heightRange.value+'px');
+
+      gridEl.style.gridTemplateColumns=`repeat(${cols}, ${cell}px)`;
+      gridEl.style.gridTemplateRows=`repeat(${rows}, ${cell}px)`;
+      colsVal.textContent=cols; sizeVal.textContent=cell;
+      heightVal.textContent=heightRange.value;
+      speedVal.textContent=(+speedRange.value/42).toFixed(2)+'×';
+
+      rebuildCells(cols*rows);
+      if(photo && photo.img) resampleToGrid(photo.img);
+      if(story.frames.length) prepareStoryHeights();
+      face.resizeCache();
+    }
+
+    /* ========= Cellular ========= */
+    let ca={cols:0,rows:0,state:[],next:[],born:[3],survive:[2,3],tick:0};
+    function caResize(){
+      ca.cols=+getComputedStyle(document.documentElement).getPropertyValue('--cols');
+      ca.rows=+getComputedStyle(document.documentElement).getPropertyValue('--rows');
+      ca.state=new Uint8Array(ca.cols*ca.rows);
+      ca.next=new Uint8Array(ca.cols*ca.rows);
+      const rnd=seededRand(baseSeed^0x9e3779b9);
+      for(let i=0;i<ca.state.length;i++) ca.state[i]=(rnd()>0.82)?1:0;
+    }
+    function caStep(){
+      const C=ca.cols,R=ca.rows,S=ca.state,N=ca.next;
+      for(let y=0;y<R;y++){
+        for(let x=0;x<C;x++){
+          const i=y*C+x; let nb=0;
+          for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
+            if(dx||dy){ const xx=(x+dx+C)%C, yy=(y+dy+R)%R; nb+=S[yy*C+xx]; }
+          }
+          const alive=S[i];
+          N[i]= alive? ([2,3].includes(nb)?1:0) : ([3].includes(nb)?1:0);
+        }
+      }
+      const t=S; ca.state=N; ca.next=t; ca.tick++;
+    }
+
+    /* ========= Photo & Story ========= */
+    async function loadImageFromUrl(url){return new Promise((res,rej)=>{const img=new Image();img.crossOrigin='anonymous';img.onload=()=>res(img);img.onerror=e=>rej(e);img.src=url;});}
+    async function loadImageFromFile(file){return new Promise((res,rej)=>{const fr=new FileReader();fr.onload=()=>{const img=new Image();img.onload=()=>res(img);img.onerror=rej;img.src=fr.result};fr.onerror=rej;fr.readAsDataURL(file);});}
+
+    function sampleToGrid(img){
+      const cols=+getComputedStyle(document.documentElement).getPropertyValue('--cols');
+      const rows=+getComputedStyle(document.documentElement).getPropertyValue('--rows');
+      sampler.width=cols; sampler.height=rows;
+      const arImg=img.width/img.height; const arGrid=cols/rows;
+      let dw,dh,dx,dy;
+      if(arImg>arGrid){ dh=rows; dw=Math.floor(rows*arImg); dx=-(dw-cols)/2; dy=0; }
+      else { dw=cols; dh=Math.floor(cols/arImg); dx=0; dy=-(dh-rows)/2; }
+      sctx.clearRect(0,0,cols,rows);
+      sctx.drawImage(img,dx,dy,dw,dh);
+      const data=sctx.getImageData(0,0,cols,rows).data;
+      const N=cols*rows; const heights=new Float32Array(N); const colors=new Uint32Array(N);
+      const strength=photo.strength;
+      for(let i=0;i<N;i++){
+        const o=i*4; const r=data[o], g=data[o+1], b=data[o+2];
+        const lum=(0.2126*r+0.7152*g+0.0722*b)/255;
+        const h=Math.pow(1-lum,1.2)*strength;
+        heights[i]=clamp(h,0,1.5);
+        colors[i]=(255<<24)|(b<<16)|(g<<8)|r;
+      }
+      return {heights, colors};
+    }
+
+    function resampleToGrid(img){
+      const cols=+getComputedStyle(document.documentElement).getPropertyValue('--cols');
+      const rows=+getComputedStyle(document.documentElement).getPropertyValue('--rows');
+      const {heights, colors}=sampleToGrid(img);
+      photo={...photo,w:cols,h:rows,heights,colors,ready:true,img};
+      if(photo.useColors){
+        for(let i=0;i<cells.length;i++){
+          const c=cells[i]; if(!c) break;
+          const rgba=colors[i]; const r=rgba&255, g=(rgba>>8)&255, b=(rgba>>16)&255;
+          const top=c.querySelector('.top');
+          if(top){ top.style.background=`linear-gradient(180deg, rgb(${r},${g},${b}), rgb(${(r*.6)|0},${(g*.6)|0},${(b*.6)|0}))`; }
+        }
+      }
+    }
+
+    async function storyLoad(urls){
+      story.frames=[]; story.heights=[]; story.colors=[];
+      for(const u of urls){
+        try{
+          const img=await loadImageFromUrl(u);
+          const s=sampleToGrid(img);
+          story.frames.push(img); story.heights.push(s.heights); story.colors.push(s.colors);
+        }catch(e){ console.warn('Fail load',u,e); }
+      }
+      story.idx=0; story.prog=0; story.playing=story.frames.length>1;
+      prepareStoryHeights();
+    }
+    function prepareStoryHeights(){
+      if(!story.frames.length) return;
+      const N=cells.length;
+      for(let i=0;i<N;i++){
+        const top=cells[i]?.querySelector('.top'); if(!top) continue;
+        const rgba=story.colors[story.idx]?.[i]||0xff333333;
+        const r=rgba&255, g=(rgba>>8)&255, b=(rgba>>16)&255;
+        top.style.background=`linear-gradient(180deg, rgb(${r},${g},${b}), rgb(${(r*.6)|0},${(g*.6)|0},${(b*.6)|0}))`;
+      }
+    }
+
+    /* ========= FaceMesh ========= */
+    async function startWebcam(){
+      if(face.enabled) return;
+      const fm=new FaceMesh({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
+      fm.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+      fm.onResults(onFaceResults); face.mesh=fm;
+      const cam=new Camera(videoEl,{onFrame:async()=>{await fm.send({image:videoEl});},width:640,height:480});
+      face.camera=cam; await cam.start(); face.enabled=true;
+    }
+    function stopWebcam(){try{face.camera?.stop();}catch(e){} face.enabled=false;}
+
+    function onFaceResults(res){
+      if(!res.multiFaceLandmarks||!res.multiFaceLandmarks.length) return;
+      const lm=res.multiFaceLandmarks[0];
+      face.points=lm.map(p=>({x:p.x,y:p.y}));
+      buildFaceHeat();
+    }
+    function buildFaceHeat(){
+      const cols=face.cols, rows=face.rows; if(!cols||!rows) return;
+      const points=face.points; const N=cols*rows; face.heat.fill(0); if(!points||!points.length) return;
+      const idxEyes=[33,133,263,362], idxMouth=[13,14,78,308], idxNose=[1,2,98], idxJaw=[152,234,454];
+      const allIdx=[...idxEyes,...idxMouth,...idxNose,...idxJaw];
+      for(let i=0;i<N;i++){
+        const y=(i/cols|0)/rows, x=(i%cols)/cols; let sum=0;
+        for(const id of allIdx){ const p=points[id]; if(!p) continue; const dx=x-p.x, dy=y-p.y; const d2=dx*dx+dy*dy; const sigma=0.008; sum+=Math.exp(-d2/(2*sigma*sigma)); }
+        face.heat[i]=clamp(sum*0.6,0,1);
+      }
+      const mouthOpen=(()=>{const u=13,l=14;if(!points[u]||!points[l])return 0;return Math.max(0,(points[l].y-points[u].y)*3.2);})();
+      const browRaise=(()=>{const b=105,e=159;if(!points[b]||!points[e])return 0;return Math.max(0,(points[b].y-points[e].y)*-8);})();
+      face.mouth=mouthOpen; face.brow=browRaise;
+    }
+
+    /* ========= Prompt → Params ========= */
+    function applyPrompt(){
+      const text=promptInput.value.trim().toLowerCase();
+      const h=hashStr(text||'default'); const rnd=seededRand(h);
+      const baseHue=Math.floor(rnd()*360);
+      const hueA=baseHue, hueB=(baseHue+(/ocean|teal|aqua|blue/.test(text)?20:130))%360;
+      const glow=`hsl(${Math.floor(lerp(hueA,hueB,0.3))} 95% 65% / .95)`;
+      document.documentElement.style.setProperty('--glow',glow);
+
+      heightRange.value=/storm|lightning|violent|epic/.test(text)?96:/calm|soft|gentle/.test(text)?36:60;
+      speedRange.value=/fast|neon|cyber|storm/.test(text)?82:/calm|slow|dawn/.test(text)?18:42;
+
+      MODE=/cell|organ|life|micro/.test(text)?'ca'
+        :/flow|smoke|stream|vortex/.test(text)?'flow'
+        :/ripple|drop|pulse/.test(text)?'ripple'
+        :/noise|grain|perlin|simplex/.test(text)?'noise'
+        :'ai';
+
+      hudMode.textContent=MODE==='ai'?'AI':MODE.charAt(0).toUpperCase()+MODE.slice(1);
+      badge.textContent=MODE==='ai'?'AI MODE':MODE.toUpperCase();
+
+      colsRange.value=/dense|city|grid|matrix/.test(text)?42:/sparse|calm/.test(text)?22:32;
+      sizeRange.value=/tiny|dense|matrix/.test(text)?18:/bold|chunky/.test(text)?28:22;
+
+      document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active',b.dataset.mode===MODE));
+      recomputeGrid();
+    }
+
+    /* ========= Audio: file, mic, or YouTube tab ========= */
+    let audio={enabled:false,level:0,ctx:null,analyser:null,srcNode:null,mode:'none'};
+
+    /* NEW: unified, musical meter (bass-weighted with attack/release) */
+    function makeAudioMeter(analyser){
+      analyser.smoothingTimeConstant = 0.8; // natural feel
+      const data=new Uint8Array(analyser.frequencyBinCount);
+      let level=0;
+      const ATTACK=0.5, RELEASE=0.08, GATE=0.02;
+      const W_BASS=1.8, W_MID=0.6, W_TREB=0.3;
+
+      (function loop(){
+        // bail out if audio processing disabled
+        if(!audio.enabled || !analyser) return;
+
+        analyser.getByteFrequencyData(data);
+        const n=data.length;
+        const bEnd=(n*0.18)|0, mEnd=(n*0.55)|0;
+        let b=0,m=0,t=0;
+
+        for(let i=0;i<bEnd;i++) b+=data[i];
+        for(let i=bEnd;i<mEnd;i++) m+=data[i];
+        for(let i=mEnd;i<n;i++)   t+=data[i];
+
+        b/=Math.max(1,bEnd);
+        m/=Math.max(1,mEnd-bEnd);
+        t/=Math.max(1,n-mEnd);
+
+        let e=(b*W_BASS + m*W_MID + t*W_TREB)/255;
+        e = Math.max(0, (e - GATE)/(1 - GATE)); // simple noise gate
+
+        // attack/decay envelope
+        level = e>level ? lerp(level,e,ATTACK) : lerp(level,e,RELEASE);
+        audio.level = clamp(level,0,1);
+
+        requestAnimationFrame(loop);
+      })();
+    }
+
+    function setupAnalyserFromElement(el){
+      try{
+        if(!audio.ctx) audio.ctx=new (window.AudioContext||window.webkitAudioContext)();
+        if(audio.srcNode) audio.srcNode.disconnect();
+        audio.srcNode=audio.ctx.createMediaElementSource(el);
+        audio.analyser=audio.ctx.createAnalyser();
+        audio.analyser.fftSize=512;
+        audio.srcNode.connect(audio.analyser);
+        audio.analyser.connect(audio.ctx.destination);
+        audio.enabled=true; audio.mode='music';
+        makeAudioMeter(audio.analyser); // << only change
+      }catch(e){ console.warn('Audio element setup failed',e); }
+    }
+
+    musicFile.addEventListener('change',(e)=>{
+      const f=e.target.files?.[0]; if(!f) return;
+      const url=URL.createObjectURL(f);
+      musicEl.src=url; musicEl.style.display='block';
+      musicEl.play().catch(()=>{});
+      setupAnalyserFromElement(musicEl);
+    });
+
+    audioMicToggle.addEventListener('change', async ()=>{
+      if(audioMicToggle.checked){
+        try{
+          const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+          if(!audio.ctx) audio.ctx=new (window.AudioContext||window.webkitAudioContext)();
+          const src=audio.ctx.createMediaStreamSource(stream);
+          audio.analyser=audio.ctx.createAnalyser();
+          audio.analyser.fftSize=512;
+          src.connect(audio.analyser);
+          audio.enabled=true; audio.mode='mic';
+          makeAudioMeter(audio.analyser); // << only change
+        }catch(e){ audioMicToggle.checked=false; audio.enabled=false; console.warn('Mic denied',e); }
+      } else { audio.enabled=false; audio.mode='none'; }
+    });
+
+    tabAudioBtn.addEventListener('click', async ()=>{
+      try{
+        const stream=await navigator.mediaDevices.getDisplayMedia({ video:true, audio:true });
+        if(!audio.ctx) audio.ctx=new (window.AudioContext||window.webkitAudioContext)();
+        const src=audio.ctx.createMediaStreamSource(stream);
+        audio.analyser=audio.ctx.createAnalyser();
+        audio.analyser.fftSize=512;
+        src.connect(audio.analyser);
+        audio.enabled=true; audio.mode='tab';
+        makeAudioMeter(audio.analyser); // << only change
+        alert('Select your YouTube tab and tick “Share tab audio”. If on macOS, allow Screen Recording for your browser.');
+      }catch(e){
+        console.warn('Tab audio capture denied/unsupported',e);
+        alert('Failed to capture tab audio. Use Chrome/Edge on http(s)/localhost and tick “Share tab audio”. On macOS allow Screen Recording.');
+      }
+    });
+
+    /* ========= Credit overlay ========= */
+    function updateCredit(){
+      const text=creditText.value.trim();
+      const link=creditLink.value.trim();
+      const show=creditToggle.checked && text;
+      creditOverlay.style.display=show?'inline-flex':'none';
+      creditOverlay.innerHTML= show ? (link?`<a href="${link}" target="_blank" rel="noopener">${text}</a>`:text) : '';
+    }
+    creditText.addEventListener('input',updateCredit);
+    creditLink.addEventListener('input',updateCredit);
+    creditToggle.addEventListener('change',updateCredit);
+
+    /* ========= Auto-Evolve ========= */
+    let evolveTimer=null;
+    evolveToggle.addEventListener('change',(e)=>{
+      if(e.target.checked){
+        evolveTimer=setInterval(()=>{
+          const bank=['ocean deep calm teal blue gentle','neon cyberpunk hot magenta electric fast','forest dawn green golden mist slow','storm supercell lightning cobalt violent fast'];
+          promptInput.value=bank[(Math.random()*bank.length)|0]; applyPrompt();
+        },30000);
+      } else { clearInterval(evolveTimer); }
+    });
+
+    /* ========= Animate ========= */
+    let t=0,last=performance.now(),accum=0,frames=0,fps=60;
+    function animate(){
+      const now=performance.now(); const dt=(now-last)/1000; last=now; accum+=dt; frames++; if(accum>0.35){ fps=Math.round(frames/accum); frames=0; accum=0 }
+      hudFPS.textContent=fps;
+
+      const cols=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--cols'))||32;
+      const rows=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--rows'))||20;
+      const sp=lerp(.25, 3.2, +speedRange.value/100); t+=dt*sp;
+      active=0;
+
+      if(MODE==='ca' && Math.random()<0.008){
+        const r=Math.random();
+        if(r<.33){ ca.born=[3]; ca.survive=[2,3]; }
+        else if(r<.66){ ca.born=[3,6]; ca.survive=[2,3,4]; }
+        else { ca.born=[2,3,4]; ca.survive=[3,4,5]; }
+      }
+
+      if(MODE==='story' && story.playing && story.frames.length>1){
+        story.prog += dt*story.speed;
+        if(story.prog>=1){ story.prog=0; story.idx=(story.idx+1)%story.frames.length; prepareStoryHeights(); }
+      }
+
+      for(let i=0;i<cells.length;i++){
+        const c=cells[i]; const y=(i/cols|0), x=(i%cols);
+        let amp=0;
+
+        /* Base wave so the grid always moves */
+        const base = (Math.sin((x + y)*0.25 + t*1.6) * 0.5 + 0.5) * 0.12;
+        amp = Math.max(amp, base);
+
+        if(MODE==='noise' || MODE==='ai'){ const n=noise(x*0.1 + t*0.55, y*0.1 - t*0.38); amp=Math.max(amp,(n+1)/2); }
+        if(MODE==='ripple' || MODE==='ai'){
+          const cx=cols*.5+Math.sin(t*.8)*cols*.25, cy=rows*.5+Math.cos(t*.6)*rows*.25;
+          const dx=x-cx, dy=y-cy; const d=Math.hypot(dx,dy);
+          const r = Math.max(0, 1 - d/8) * (Math.sin(d*1.1 - t*4)*.5+.5);
+          amp = MODE==='ai'? lerp(amp, r, .45) : r;
+        }
+        if(MODE==='flow' || MODE==='ai'){
+          const a = flow(x,y,t); const swirl=(Math.sin(a*2+t*1.3)*.5+.5);
+          amp = MODE==='ai'? lerp(amp, swirl, .35) : swirl;
+        }
+        if(MODE==='ca' || MODE==='ai'){
+          if((i===0) && (Math.random()<.3)) caStep();
+          const cellCA = ca.state[y*cols+x];
+          amp = MODE==='ai'? lerp(amp, cellCA, .5) : cellCA;
+        }
+        if((MODE==='photo' || MODE==='ai') && photo && photo.ready && photo.w===cols && photo.h===rows){
+          const ph = photo.heights[y*cols + x];
+          amp = MODE==='ai' ? lerp(amp, ph, .6) : ph;
+        }
+        if(MODE==='story' && story.frames.length){
+          const i0=story.idx, i1=(story.idx+1)%story.frames.length;
+          const h0=story.heights[i0]?.[y*cols+x]||0, h1=story.heights[i1]?.[y*cols+x]||0;
+          const mix=story.prog; const hs = lerp(h0,h1,mix);
+          amp = lerp(amp, hs, MODE==='ai'? .45:.85);
+
+          const c0=story.colors[i0]?.[y*cols+x]||0xff202020, c1=story.colors[i1]?.[y*cols+x]||0xff202020;
+          const r0=c0&255, g0=(c0>>8)&255, b0=(c0>>16)&255; const r1=c1&255, g1=(c1>>8)&255, b1=(c1>>16)&255;
+          const R=(r0+(r1-r0)*mix)|0, G=(g0+(g1-g0)*mix)|0, B=(b0+(b1-b0)*mix)|0;
+          const topFace=c.querySelector('.top'); if(topFace){ topFace.style.background=`linear-gradient(180deg, rgb(${R},${G},${B}), rgb(${(R*.6)|0},${(G*.6)|0},${(B*.6)|0}))`; }
+        }
+        if((MODE==='webcam' || MODE==='ai') && face.enabled && face.heat){
+          const fh = face.heat[y*cols + x]||0;
+          const mouthBoost = (face.mouth||0)*0.8;
+          const browBoost  = (face.brow||0)*0.6;
+          const feat = clamp(fh + mouthBoost + browBoost, 0, 1);
+          amp = MODE==='ai'? lerp(amp, feat, .5) : feat;
+        }
+
+        if(audio.enabled){ amp = clamp(amp + audio.level*0.6, 0, 1) }
+
+        const z = amp * (parseInt(heightRange.value,10));
+        c.style.transform=`translateZ(${z}px)`;
+        c.style.filter = `drop-shadow(0 0 ${8+amp*26}px var(--glow))`;
+        const hot = (amp>.55)|0; if(hot) active++; c.dataset.hot=hot;
+      }
+      hudActive.textContent=active;
+      requestAnimationFrame(animate);
+    }
+
+    /* ========= Events & Init ========= */
+    function applyPhotoStrengthUI(){
+      photo.strength=parseInt(photoStrengthRange.value,10)/100;
+      photoStrengthVal.textContent=photo.strength.toFixed(2)+'×';
+      if(photo.img) resampleToGrid(photo.img);
+    }
+
+    function init(){
+      recomputeGrid(); caResize(); face.resizeCache();
+      promptInput.value='neon cyberpunk stormy waves'; applyPrompt();
+      requestAnimationFrame(animate());
+      updateCredit();
+      const s=zoomRange.value/100;
+      document.documentElement.style.setProperty('--ui-zoom', s);
+      zoomVal.textContent=Math.round(s*100)+'%';
+    }
+
+    colsRange.addEventListener('input',()=>{recomputeGrid(); caResize()});
+    sizeRange.addEventListener('input',recomputeGrid);
+    heightRange.addEventListener('input',recomputeGrid);
+    speedRange.addEventListener('input',recomputeGrid);
+    zoomRange.addEventListener('input',()=>{
+      const s=zoomRange.value/100;
+      document.documentElement.style.setProperty('--ui-zoom', s);
+      zoomVal.textContent=Math.round(s*100)+'%';
+    });
+
+    applyBtn.addEventListener('click',applyPrompt);
+    window.addEventListener('resize',()=>{recomputeGrid(); caResize()});
+
+    useColorsChk.addEventListener('change',()=>{photo.useColors=useColorsChk.checked; if(photo.img) resampleToGrid(photo.img);});
+    photoStrengthRange.addEventListener('input',applyPhotoStrengthUI);
+    applyPhotoStrengthUI();
+
+    photoFile?.addEventListener('change', async (e)=>{
+      if(e.target.files&&e.target.files[0]){
+        try{
+          const img=await loadImageFromFile(e.target.files[0]);
+          MODE='photo'; document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active', b.dataset.mode==='photo'));
+          resampleToGrid(img); hudMode.textContent='Photo'; badge.textContent='PHOTO';
+        }catch(err){ console.warn(err);}
+      }
+    });
+    loadUrlBtn?.addEventListener('click', async ()=>{
+      const url=photoUrl.value.trim(); if(!url) return;
+      try{
+        const img=await loadImageFromUrl(url);
+        MODE='photo'; document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active', b.dataset.mode==='photo'));
+        resampleToGrid(img); hudMode.textContent='Photo'; badge.textContent='PHOTO';
+      }catch(err){ console.warn(err); }
+    });
+
+    /* Story-mode controls are optional in this UI */
+    storyLoadBtn?.addEventListener('click', async()=>{
+      const lines=(framesTextarea?.value||'').split('\n').map(s=>s.trim()).filter(Boolean);
+      if(lines.length<2){ alert('Enter at least 2 image URLs (one per line).'); return; }
+      await storyLoad(lines);
+      MODE='story'; document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active', b.dataset.mode==='story'));
+      hudMode.textContent='Story'; badge.textContent='STORY';
+    });
+    storyPlayBtn?.addEventListener('click',()=>{ story.playing=true; });
+    storyStopBtn?.addEventListener('click',()=>{ story.playing=false; });
+
+    webcamStart.addEventListener('click',()=>{ startWebcam().then(()=>{
+      MODE='webcam'; document.querySelectorAll('button[data-mode]').forEach(b=>b.classList.toggle('active', b.dataset.mode==='webcam'));
+      hudMode.textContent='Webcam'; badge.textContent='WEBCAM';
+    })});
+    webcamStop.addEventListener('click',()=>{ stopWebcam(); });
+
+    /* Start! */
+    init();
+  </script>
+</body>
+</html>
