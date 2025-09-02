@@ -1,6 +1,6 @@
-# NeuroWave Grid (No libs) — AI Portrait • Story • Music • Auto‑Evolve
+# NeuroWave Grid — AI Portrait • Story • Music • Auto‑Evolve (Vanilla JS)
 
-An interactive 3D cube‑grid visualizer that reacts to prompts, photos/webcam (MediaPipe FaceMesh), and live audio (file, mic, or shared YouTube tab). Everything runs in the browser with **no frameworks**—just HTML, CSS, and vanilla JS.
+An interactive 3D cube‑grid visualizer that responds to prompts, photos/webcam (MediaPipe FaceMesh), and live audio (file, mic, or shared YouTube tab). Everything runs in the browser with **no frameworks**—just HTML, CSS, and vanilla JS.
 
 > Made with ♥ by [Wiqi Lee](https://x.com/wiqi_lee) — follow for updates.
 
@@ -9,105 +9,100 @@ An interactive 3D cube‑grid visualizer that reacts to prompts, photos/webcam (
 ## Live Demo
 👉 https://wiqilee.github.io/neurowave-grid/
 
+> Tip: In your repo, enable **Settings → Pages → Deploy from branch → `main` / root** so this URL stays live.
+
 ---
 
-## What’s New (this build)
+## What’s New in This Build
 
-- **Unified musical meter** — Bass‑weighted spectrum with attack/release envelope and a light noise gate for **smoother, beat‑true motion**. Drives the grid via `audio.level` (0–1).  
-  _Changed area: `makeAudioMeter()` is called from music/mic/tab audio setups; no other logic altered._
-- **Optional Story‑mode controls** — The code safely checks (`?.`) if story UI is present, so you can include or exclude those fields without breaking anything.
-- **UI Scale (zoom)** — Use the slider to quickly shrink/grow the entire app for recording or layout testing. Works via CSS `zoom` (with `@supports` fallback to `transform: scale()`).
-- **Tab Audio capture tips** — Clear instructions for “Share tab audio” + macOS Screen Recording permission for Chrome/Edge.
+- **Improved musical feel** — Bass‑weighted spectrum with a light noise gate plus attack/release smoothing, feeding a normalized `audio.level` \[0–1\] for **smoother, beat‑true motion**. Implemented directly inside the analyser loops for music/mic/tab audio—no extra function required.
+- **Subtle baseline motion** — A gentle sine field keeps the grid alive even in quiet passages.
+- **Optional Story‑mode controls** — The code uses safe optional chaining (`?.`) so including/excluding Story UI elements will not break anything.
+- **UI Scale (zoom)** — Quickly shrink or grow the entire app via CSS `zoom` (with a `transform: scale()` fallback).
+- **Tab Audio capture tips** — Clear guidance for “Share tab audio” and macOS Screen Recording permission, right in the UI.
 
 ---
 
 ## Features
 
 - **Prompt → Style**: Lightweight CLIP‑style mapping turns keywords into palette, speed, depth, and mode choices.
-- **Modes**: Prompt AI, Flow Field, Ripple, Noise, Cellular (CA), Photo Mosaic, Webcam Face, and Story Blend.
-- **Photo & Webcam**: Sample colors and luminance to sculpt the grid in 3D; optional FaceMesh heatmap (eyes/brows/mouth).
-- **Audio Reactive**: Works with audio files, microphone, or **YouTube tab audio**.
-- **Auto‑Evolve**: Randomly rotates through curated prompt styles every 30s (toggleable).
-- **Zero frameworks**: Pure HTML/CSS/JS; MediaPipe is loaded from CDN for the face mesh.
+- **Modes**: Prompt AI, Flow Field, Ripple, Noise, Cellular (CA), Photo Mosaic, Webcam Face, Story Blend.
+- **Photo & Webcam**: Samples colors and luminance to sculpt the grid; optional FaceMesh heatmap (brows, mouth, facial area).
+- **Audio Reactive**: Works with local audio files, **microphone**, or **YouTube tab audio**.
+- **Auto‑Evolve**: Rotates curated prompt styles every 30s (toggleable).
+- **No frameworks**: Pure HTML/CSS/JS; **MediaPipe FaceMesh is loaded from CDN**.
 
 ---
 
-## Run locally
+## Quick Start (Local)
 
-1. Download or clone the repo.
-2. Serve the folder (any static server works). Examples:
-   - **VS Code Live Server** or
-   - `python3 -m http.server 5500` then open `http://localhost:5500`
-3. Open the page in **Chrome or Edge** (recommended).
+1. Clone or download this repo.
+2. Serve the folder with any static server. For example:
+   ```bash
+   # Option A: VS Code Live Server (extension)
+   # Option B: Python http.server
+   python3 -m http.server 5500
+   ```
+3. Open `http://localhost:5500` in **Chrome or Edge** (recommended).
 
-> Some features (Webcam, Mic, Tab Audio) require **https** or **localhost** due to browser permissions.
+> Webcam/Mic/Tab‑Audio require **HTTPS** or **localhost** because of browser security policies.
 
 ---
 
 ## Controls & UI
 
-- **Prompt → Style**  
-  Type something like `neon cyberpunk stormy waves` and press **Generate**.
-- **Modes**  
-  Click a mode button: Prompt AI / Flow Field / Ripple / Noise / Cellular / Photo Mosaic / Webcam Face / Story Blend.
-- **Photo / Webcam**  
-  - Paste an image URL or upload a file.  
-  - Toggle **Use Image Colors** to paint the grid tops.  
-  - Adjust **Height Strength** to control how much luminance sculpts the grid.  
-  - Start/stop **Webcam** to enable FaceMesh influence (brows, mouth, facial area heatmap).
-- **Music / Mic**  
-  - **Audio file**: choose a local file (the player appears).  
-  - **Microphone**: tick **Use microphone** and allow capture.  
-  - **YouTube (tab audio)**: click **Use Tab Audio**, select your YT tab and **tick “Share tab audio”**.  
-    - On macOS, grant Screen Recording permission to your browser if prompted.
-- **Controls**  
-  - Grid columns, cube size, height (depth), speed, **UI Scale** (shrink/grow the entire app).  
-  - Presets: Ocean Dream / Neon Night / Forest Dawn / Supercell.  
-  - Auto‑Evolve toggle to change style every 30s.
-- **Credit Overlay**  
-  Add “Music: Title — Artist” and an optional link; toggle **Show** to display an on‑canvas credit pill.
+- **Prompt → Style** — e.g., `neon cyberpunk stormy waves`, then **Generate**.
+- **Modes** — Prompt AI / Flow Field / Ripple / Noise / Cellular / Photo Mosaic / Webcam Face / Story Blend.
+- **Photo / Webcam**
+  - Paste an image URL or upload a file.
+  - Toggle **Use Image Colors** to paint cube tops.
+  - Adjust **Height Strength** to set how luminance sculpts the grid.
+  - **Webcam**: enable to blend a FaceMesh‑based heatmap (brows, mouth, facial area).
+- **Music / Mic**
+  - **File**: choose a local audio file (a player appears).
+  - **Microphone**: tick **Use microphone** and allow permission.
+  - **YouTube (Tab Audio)**: click **Use Tab Audio**, pick your YT tab, and tick **“Share tab audio.”**
+    - On macOS, allow **Screen Recording** for your browser if prompted.
+- **Controls**
+  - Columns, cube size, height (depth), speed, and **UI Scale**.
+  - Presets: Ocean Dream / Neon Night / Forest Dawn / Supercell.
+  - **Auto‑Evolve**: change style every 30s.
 
 ---
 
-## Audio reactivity (technical)
+## Audio Reactivity (Technical Notes)
 
-The new meter reads the analyser’s spectrum and computes a **bass‑weighted energy** with separate weightings for bass/mid/treble. It applies:
-- **Noise gate** (to ignore room hiss),
-- **Attack/Release envelope** (fast rise, smooth decay),
-- Outputs a normalized `audio.level` in `[0,1]` that is added to each cell’s wave amplitude during `animate()`.
-
-This makes the motion feel **tied to the kick and groove** rather than jittery per‑frame FFT spikes.
+The analyser computes a **bass‑weighted energy** from the FFT. A **noise gate** suppresses hiss; an **attack/release envelope** smooths spikes. The final scalar `audio.level \in [0,1]` is added to each cell’s amplitude inside `animate()`, so motion feels **locked to the kick and groove** instead of twitchy per‑bin changes.
 
 ---
 
 ## Story Blend
 
-Provide ≥2 image URLs (one per line) to crossfade **heights** and **colors** over time. The code is defensive—if the story fields aren’t in the DOM, nothing breaks.
+Provide ≥2 image URLs (one per line). The app crossfades **heights** and **colors** between frames over time. If the Story UI is absent, the code simply skips Story mode safely.
 
 ---
 
-## Performance tips
+## Performance Tips
 
-- Fewer columns and smaller cube size improve FPS, especially on laptops.
-- Keep the browser window moderate in size or use **UI Scale** to shrink the app during recording.
-- Turn off webcam/mic when not used.
+- Reduce **Columns** or **Cube Size** for higher FPS on laptops.
+- Keep the window moderate in size, or use **UI Scale** when recording.
+- Turn off webcam/mic when not needed.
 
 ---
 
 ## Privacy
 
-All processing happens **in your browser**. No servers; no analytics. (Only CDNs for MediaPipe scripts and any images you choose to load.)
+All processing happens **in your browser**. No servers, no analytics. (Only CDN scripts for MediaPipe and any images you choose to load.)
 
 ---
 
 ## Credits
 
 - Core concept & code: **Wiqi Lee** — [X: @wiqi_lee](https://x.com/wiqi_lee)  
-- MediaPipe FaceMesh by Google Research team (via JS CDN).
+- MediaPipe FaceMesh by Google Research (via JS CDN).
 
 ---
 
 ## License
 
-MIT — **Wiqi Lee** — [X: @wiqi_lee](https://x.com/wiqi_lee) see `LICENSE`.
-
+MIT — **Wiqi Lee** — see [`LICENSE`](./LICENSE).
